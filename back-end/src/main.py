@@ -17,8 +17,6 @@ def mostrar_tela():
 # Rota 2: A porta que vai receber os dados do formulário
 @app.post("/api/leads")
 def salvar_lead(lead: Lead):
-    # Por enquanto, vamos apenas mostrar no terminal que funcionou!
     print(f"✅ Novo lead recebido com sucesso: {lead.nome} - {lead.telefone}")
     
-    # (No próximo passo, é aqui que vamos colocar o código do PostgreSQL)
     return {"mensagem": "Lead salvo com sucesso!"}
