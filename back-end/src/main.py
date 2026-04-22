@@ -1,3 +1,8 @@
+import os
+from dotenv import load_dotenv
+# Load environment variables before anything else!
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
@@ -5,6 +10,7 @@ from typing import List
 # Internal imports from your own files
 from src.database import create_user, authenticate_user
 from src.schemas import UserCreate, UserLogin, UserResponse
+from src.auth_utils import create_access_token # <--- New import for JWT!
 
 # Initialize the FastAPI application
 app = FastAPI(
@@ -52,12 +58,12 @@ def register_user(user_data: UserCreate):
     
     return {"id": new_user_id, "full_name": user_data.full_name}
 
-@app.post("/login", response_model=UserResponse)
+@app.post("/login") # Removed response_model to allow the token to be returned
 def login(credentials: UserLogin):
     """
-    Authenticates a user and returns their basic info.
-    In the future, this will return a JWT Token.
+    Authenticates a user and returns a JWT Access Token.
     """
+    # 1. Checks if the email and password are correct in the database
     user = authenticate_user(email=credentials.email, password=credentials.password)
     
     if not user:
@@ -67,11 +73,20 @@ def login(credentials: UserLogin):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    return user
+    # 2. If the password is correct, generates the VIP Badge (JWT Token)
+    # We put the user's ID inside the token (referred to as the 'sub' or subject)
+    access_token = create_access_token(data={"sub": str(user["id"])})
+    
+    # 3. Returns the token for the frontend to store, along with user data
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
 
 # --- SYSTEM ROUTES ---
 
 @app.get("/")
 def read_root():
     """Health check endpoint."""
-    return {"message": "Legacy Nexus API is running securely! 🚀"}
+    return {"message": "CRMAX API is running securely! 🚀"}
