@@ -1,7 +1,7 @@
 import os
 import psycopg2
 from dotenv import load_dotenv
-from auth_utils import hash_password, verify_password
+from src.auth_utils import hash_password, verify_password
 
 # Load environment variables from root
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
