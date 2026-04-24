@@ -21,6 +21,16 @@ class LeadSource(str, Enum):
     referral = "Referral"
     other = "Other"
 
+class PlanType(str, Enum):
+    Bronze = 'Bronze'
+    Silver = 'Silver'
+    Gold = 'Gold'
+
+class UserRole(str, Enum):
+    Owner = 'Owner'
+    Manager = 'Manager'
+    Employee = 'Employee'
+
 # --- USER SCHEMAS ---
 
 class UserCreate(BaseModel):
@@ -36,8 +46,13 @@ class UserLogin(BaseModel):
 
 class UserResponse(BaseModel):
     """Data returned to the frontend (NEVER return the password)."""
-    id: UUID
+    id: str
     full_name: str
+    plan: PlanType
+    role: UserRole
+
+    class Config:
+        from_attributes = True
 
 # --- LEAD SCHEMAS ---
 
@@ -48,3 +63,4 @@ class LeadCreate(BaseModel):
     email: Optional[EmailStr] = None # Email is optional for leads
     status: LeadStatus = LeadStatus.new # Defaults to 'New'
     source: LeadSource = LeadSource.other # Defaults to 'Other'
+
