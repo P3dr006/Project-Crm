@@ -43,9 +43,13 @@ loginForm.addEventListener("submit", async (event) => {
 
         // --- SUCCESS ---
         console.log("✅ User logged in:", data);
-        localStorage.setItem("user", JSON.stringify(data));
+
+        // SAVE THE TOKEN AND USER DATA IN THE BROWSER
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("user", JSON.stringify(data.user));
         
-        alert(`Bem-vindo de volta, ${data.full_name}!`);
+        alert(`Welcome back, ${data.user.full_name}!`);
+        // Redirect to the Dashboard (We will build this next)
         // window.location.href = "dashboard.html";
 
     } catch (error) {
