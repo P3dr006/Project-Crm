@@ -1,12 +1,14 @@
-import psycopg2
+import logging
 from psycopg2 import pool, errors
 from src.auth_utils import hash_password, verify_password
 from src.config import DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT
 
+logger = logging.getLogger(__name__)
+
 # --- CONNECTION POOLING SETUP ---
 # We initialize a pool with 5 min and 20 max connections
 try:
-    connection_pool = psycopg2.pool.ThreadedConnectionPool(
+    connection_pool = pool.ThreadedConnectionPool(
         5, 20,
         host=DB_HOST,
         database=DB_NAME,
@@ -14,9 +16,9 @@ try:
         password=DB_PASS,
         port=DB_PORT
     )
-    print("✅ Connection pool created successfully")
+    logger.info("Connection pool created successfully")
 except Exception as e:
-    print(f"❌ Error creating connection pool: {e}")
+    logger.critical("Error creating connection pool: %s", e)
 
 def get_db_connection():
     """Gets a connection from the pool."""
@@ -64,7 +66,7 @@ def create_user(full_name, email, raw_password):
         
     except Exception as e:
         # Catching other random database errors
-        print(f"❌ Error creating user: {e}")
+        logger.error("Error creating user: %s", e)
         conn.rollback()
         return {"error": "database_error"}
         
