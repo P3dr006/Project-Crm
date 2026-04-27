@@ -109,14 +109,25 @@ def create_new_lead(lead_data: LeadCreate, user_id: str = Depends(get_current_us
     return {"id": new_lead_id, "message": "Lead created successfully"}
 
 @app.get("/leads")
-def get_user_leads(user_id: str = Depends(get_current_user_id)):
+def get_user_leads(
+    page: int = 1, 
+    size: int = 50, 
+    user_id: str = Depends(get_current_user_id)
+):
     """
-    Retrieves all leads belonging to the currently logged-in user.
-    PROTECTED: Requires a valid JWT token.
+    Retrieves leads for the current user with pagination.
+    Default: Page 1, Size 50.
     """
-    leads = get_leads_by_user(user_id=user_id)
-    return {"leads": leads, "total": len(leads)}
-
+    # Calculate offset (e.g., Page 2 starts after skipping the first 'size' items)
+    offset = (page - 1) * size
+    
+    leads = get_leads_by_user(user_id=user_id, limit=size, offset=offset)
+    return {
+        "page": page,
+        "size": size,
+        "total_on_page": len(leads),
+        "leads": leads
+    }
 # --- SYSTEM ROUTES ---
 
 @app.get("/")
