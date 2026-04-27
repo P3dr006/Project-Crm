@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.database import create_user, authenticate_user, create_lead, get_leads_by_user
 from src.schemas import UserCreate, UserLogin, UserResponse, LeadCreate
 from src.auth_utils import create_access_token, verify_access_token
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 # Initialize the FastAPI application
 app = FastAPI(
