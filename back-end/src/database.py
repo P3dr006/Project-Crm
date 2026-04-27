@@ -1,4 +1,5 @@
 import logging
+
 from psycopg2 import pool, errors
 from src.auth_utils import hash_password, verify_password
 from src.config import DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT
@@ -16,16 +17,15 @@ try:
         password=DB_PASS,
         port=DB_PORT
     )
-    logger.info("Connection pool created successfully")
+
 except Exception as e:
-    logger.critical("Error creating connection pool: %s", e)
+    logger.critical("FATAL: Could not connect to database: %s", e)
+    raise e 
 
 def get_db_connection():
-    """Gets a connection from the pool."""
     return connection_pool.getconn()
 
 def release_db_connection(conn):
-    """Returns a connection back to the pool."""
     connection_pool.putconn(conn)
 
 # --- USER FUNCTIONS ---
@@ -107,6 +107,56 @@ def create_lead(user_id: str, lead_data):
         lead_id = cursor.fetchone()[0]
         conn.commit()
         return str(lead_id)
+    finally:
+        cursor.close()
+        release_db_connection(conn)
+
+def get_lead_by_id(lead_id: str, user_id: str):
+    """Fetches a single lead, ensuring it belongs to the requesting user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM leads WHERE id = %s AND user_id = %s;"
+    try:
+        cursor.execute(query, (lead_id, user_id))
+        row = cursor.fetchone()
+        if not row: return None
+        columns = [desc[0] for desc in cursor.description]
+        lead = dict(zip(columns, row))
+        lead['id'] = str(lead['id'])
+        return lead
+    finally:
+        cursor.close()
+        release_db_connection(conn)
+
+def update_lead(lead_id: str, user_id: str, update_data: dict):
+    """Updates lead fields dynamically."""
+    if not update_data: return False
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Building dynamic SQL: SET key1=%s, key2=%s...
+    fields = ", ".join([f"{k} = %s" for k in update_data.keys()])
+    values = list(update_data.values())
+    values.extend([lead_id, user_id])
+    
+    query = f"UPDATE leads SET {fields}, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s;"
+    try:
+        cursor.execute(query, tuple(values))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        cursor.close()
+        release_db_connection(conn)
+
+def delete_lead(lead_id: str, user_id: str):
+    """Permanently deletes a lead."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "DELETE FROM leads WHERE id = %s AND user_id = %s;"
+    try:
+        cursor.execute(query, (lead_id, user_id))
+        conn.commit()
+        return cursor.rowcount > 0
     finally:
         cursor.close()
         release_db_connection(conn)

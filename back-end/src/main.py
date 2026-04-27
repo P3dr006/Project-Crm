@@ -1,18 +1,18 @@
 import logging
 
-from fastapi import FastAPI, HTTPException, status, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.middleware.cors import CORSMiddleware
-
-# Internal imports from your own files
-from src.database import create_user, authenticate_user, create_lead, get_leads_by_user
-from src.schemas import UserCreate, UserLogin, UserResponse, LeadCreate
-from src.auth_utils import create_access_token, verify_access_token
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
+from fastapi import FastAPI, HTTPException, status, Depends, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
+
+# Internal imports from your own files
+from src.database import create_user, authenticate_user, create_lead, get_leads_by_user, get_lead_by_id, delete_lead, update_lead
+from src.schemas import UserCreate, UserLogin, UserResponse, LeadCreate, LeadUpdate
+from src.auth_utils import create_access_token, verify_access_token
 
 # Initialize the FastAPI application
 app = FastAPI(
@@ -123,24 +123,33 @@ def create_new_lead(lead_data: LeadCreate, user_id: str = Depends(get_current_us
 
 @app.get("/leads")
 def get_user_leads(
-    page: int = 1, 
-    size: int = 50, 
+    page: int = Query(1, ge=1), # Validation: must be >= 1
+    size: int = Query(50, ge=1, le=100), # Validation: 1 to 100
     user_id: str = Depends(get_current_user_id)
 ):
-    """
-    Retrieves leads for the current user with pagination.
-    Default: Page 1, Size 50.
-    """
-    # Calculate offset (e.g., Page 2 starts after skipping the first 'size' items)
     offset = (page - 1) * size
-    
     leads = get_leads_by_user(user_id=user_id, limit=size, offset=offset)
-    return {
-        "page": page,
-        "size": size,
-        "total_on_page": len(leads),
-        "leads": leads
-    }
+    return {"page": page, "size": size, "leads": leads}
+
+@app.get("/leads/{lead_id}")
+def get_lead(lead_id: str, user_id: str = Depends(get_current_user_id)):
+    lead = get_lead_by_id(lead_id, user_id)
+    if not lead: raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+@app.patch("/leads/{lead_id}")
+def patch_lead(lead_id: str, lead_data: LeadUpdate, user_id: str = Depends(get_current_user_id)):
+    # Convert Pydantic model to dict, removing None values
+    update_dict = lead_data.dict(exclude_unset=True)
+    success = update_lead(lead_id, user_id, update_dict)
+    if not success: raise HTTPException(status_code=404, detail="Lead not found or no changes made")
+    return {"message": "Lead updated successfully"}
+
+@app.delete("/leads/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_lead(lead_id: str, user_id: str = Depends(get_current_user_id)):
+    success = delete_lead(lead_id, user_id)
+    if not success: raise HTTPException(status_code=404, detail="Lead not found")
+    return None
 
 
 # --- SYSTEM ROUTES ---

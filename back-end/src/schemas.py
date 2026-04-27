@@ -1,7 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from enum import Enum
 from typing import Optional
-from uuid import UUID
 
 # --- ENUMS (Must match the database exactly) ---
 
@@ -63,4 +62,12 @@ class LeadCreate(BaseModel):
     email: Optional[EmailStr] = None # Email is optional for leads
     status: LeadStatus = LeadStatus.new # Defaults to 'New'
     source: LeadSource = LeadSource.other # Defaults to 'Other'
+
+class LeadUpdate(BaseModel):
+    """Schema for updating leads. All fields are optional."""
+    full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    phone: Optional[str] = Field(None, min_length=8, max_length=20)
+    email: Optional[EmailStr] = None
+    status: Optional[LeadStatus] = None # Enums can be validated in the logic
+    source: Optional[LeadSource] = None
 
