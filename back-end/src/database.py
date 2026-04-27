@@ -1,5 +1,5 @@
 import psycopg2
-from psycopg2 import pool
+from psycopg2 import pool, errors
 from src.auth_utils import hash_password, verify_password
 from src.config import DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT
 
@@ -29,25 +29,48 @@ def release_db_connection(conn):
 # --- USER FUNCTIONS ---
 
 def create_user(full_name, email, raw_password):
-    """Creates a new user using a connection from the pool."""
+    """
+    Creates a new user and safely handles unique constraints.
+    Returns the complete user dictionary for Pydantic validation, or an error code.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     hashed_pwd = hash_password(raw_password)
     
-    query = "INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s) RETURNING id;"
+    # We now request the DB to return all fields needed by the Pydantic UserResponse schema
+    query = """
+        INSERT INTO users (full_name, email, password_hash) 
+        VALUES (%s, %s, %s) 
+        RETURNING id, full_name, plan, role;
+    """
     
     try:
         cursor.execute(query, (full_name, email, hashed_pwd))
-        user_id = cursor.fetchone()[0]
+        user_record = cursor.fetchone()
         conn.commit()
-        return str(user_id)
+        
+        # Returning a structured dict ready for Pydantic
+        return {
+            "id": str(user_record[0]),
+            "full_name": user_record[1],
+            "plan": user_record[2],
+            "role": user_record[3]
+        }
+        
+    except errors.UniqueViolation:
+        # Catching the exact error when an email already exists
+        conn.rollback()
+        return {"error": "email_exists"}
+        
     except Exception as e:
+        # Catching other random database errors
         print(f"❌ Error creating user: {e}")
         conn.rollback()
-        return None
+        return {"error": "database_error"}
+        
     finally:
         cursor.close()
-        release_db_connection(conn) # Returns connection to pool
+        release_db_connection(conn)
 
 def authenticate_user(email, password):
     """Verifies user credentials using the connection pool."""

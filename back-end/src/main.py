@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Internal imports from your own files
 from src.database import create_user, authenticate_user, create_lead, get_leads_by_user
-from src.schemas import UserCreate, UserLogin, LeadCreate
+from src.schemas import UserCreate, UserLogin, UserResponse, LeadCreate
 from src.auth_utils import create_access_token, verify_access_token
 
 # Initialize the FastAPI application
@@ -44,26 +44,32 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
 
 # --- AUTH ROUTES ---
 
-@app.post("/register", status_code=status.HTTP_201_CREATED)
+@app.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register_user(user_data: UserCreate):
     """
-    Registers a new user in the system.
-    Validates data via Pydantic and saves to PostgreSQL.
+    Registers a new user. 
+    Pydantic automatically filters the output to match UserResponse.
     """
-    new_user_id = create_user(
+    result = create_user(
         full_name=user_data.full_name,
         email=user_data.email,
         raw_password=user_data.password
     )
     
-    if not new_user_id:
-        # If create_user returns None, it's usually because the email is already taken
+    # Differentiating the errors for the frontend
+    if result.get("error") == "email_exists":
         raise HTTPException(
             status_code=400, 
-            detail="Email already registered or database error."
+            detail="This email is already registered."
+        )
+    elif result.get("error") == "database_error":
+        raise HTTPException(
+            status_code=500, 
+            detail="Internal server error while creating user."
         )
     
-    return {"id": new_user_id, "full_name": user_data.full_name, "message": "User registered successfully."}
+    # If no errors, return the dict. Pydantic ensures it matches UserResponse.
+    return result
 
 @app.post("/login")
 def login(credentials: UserLogin):
@@ -128,6 +134,8 @@ def get_user_leads(
         "total_on_page": len(leads),
         "leads": leads
     }
+
+
 # --- SYSTEM ROUTES ---
 
 @app.get("/")
