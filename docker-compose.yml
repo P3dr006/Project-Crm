@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15
+    image: postgres:16
     container_name: nexus_db
     restart: always
     environment:
@@ -12,6 +12,38 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init/db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./back-end
+    container_name: nexus_api
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./back-end/src:/app/src
+
+  frontend:
+    build: ./front-end
+    container_name: nexus_frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./front-end/src:/app/src
+    depends_on:
+      - api
 
 volumes:
   postgres_data:
