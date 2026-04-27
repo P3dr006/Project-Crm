@@ -2,6 +2,18 @@ import bcrypt
 import os
 import jwt
 from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException, status
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise ValueError("CRITICAL ERROR: SECRET_KEY not found in environment variables")
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 def hash_password(password: str) -> str:
     """Encodes a plain text password into a secure bcrypt hash."""
@@ -19,23 +31,26 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     hashed_bytes = hashed_password.encode('utf-8')
     return bcrypt.checkpw(pwd_bytes, hashed_bytes)
 
-
-SECRET_KEY = os.getenv("SECRET_KEY")
-
-if not SECRET_KEY:
-    raise ValueError("ERRO CRÍTICO: SECRET_KEY não encontrada nas variáveis de ambiente! Verifique seu arquivo .env.")
-
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 def create_access_token(data: dict):
-    """Gera um crachá criptografado (JWT) com os dados do usuário e validade."""
+    """Generates an encrypted JWT badge with user data and expiration."""
     to_encode = data.copy()
-    
-    # Set the date and time when the badge expires.
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    
-    # Manufacturing the sealed token
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def verify_access_token(token: str):
+    """
+    Decodes the JWT token and returns the user ID.
+    This was the missing function in your local file!
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
