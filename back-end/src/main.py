@@ -1,8 +1,3 @@
-import os
-from dotenv import load_dotenv
-# Load environment variables before anything else!
-load_dotenv()
-
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware

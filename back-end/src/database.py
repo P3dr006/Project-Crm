@@ -1,19 +1,16 @@
-import os
 import psycopg2
-from dotenv import load_dotenv
 from src.auth_utils import hash_password, verify_password
 
 # Load environment variables from root
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(BASE_DIR, "..", "..", ".env"))
+from src.config import DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT
 
 def get_connection():
     return psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST"),
-        database=os.getenv("POSTGRES_DB"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        port=os.getenv("POSTGRES_PORT")
+        host=DB_HOST,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        port=DB_PORT
     )
 
 # --- USER FUNCTIONS ---
