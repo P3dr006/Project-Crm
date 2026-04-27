@@ -1,6 +1,19 @@
+# --- PYTHON ---
 .env
-__pycache__/
-.vscode/
+**/__pycache__/
+*.pyc
+*.pyo
 
+# --- NODE / FRONT-END ---
+front-end/node_modules/
+front-end/dist/
+front-end/.env.local
+front-end/.env
+
+# --- SISTEMA ---
 .DS_Store
 Thumbs.db
+.vscode/
+
+# --- PASTAS ANTIGAS ---
+front-end-old/
