@@ -3,10 +3,13 @@ import { Login } from "./pages/login";
 import { Register } from "./pages/register";
 import { Dashboard } from "./pages/dashboard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Toaster } from 'sonner';
+
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" richColors />
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
