@@ -41,22 +41,23 @@ def create_user(full_name, email, raw_password):
     
     # We now request the DB to return all fields needed by the Pydantic UserResponse schema
     query = """
-        INSERT INTO users (full_name, email, password_hash) 
-        VALUES (%s, %s, %s) 
-        RETURNING id, full_name, plan, role;
+        INSERT INTO users (full_name, email, password_hash)
+        VALUES (%s, %s, %s)
+        RETURNING id, full_name, email, plan, role, created_at;
     """
-    
+
     try:
         cursor.execute(query, (full_name, email, hashed_pwd))
         user_record = cursor.fetchone()
         conn.commit()
-        
-        # Returning a structured dict ready for Pydantic
+
         return {
             "id": str(user_record[0]),
             "full_name": user_record[1],
-            "plan": user_record[2],
-            "role": user_record[3]
+            "email": user_record[2],
+            "plan": user_record[3],
+            "role": user_record[4],
+            "created_at": user_record[5].isoformat() if user_record[5] else None,
         }
         
     except errors.UniqueViolation:
@@ -78,15 +79,22 @@ def authenticate_user(email, password):
     """Verifies user credentials using the connection pool."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    query = "SELECT id, full_name, password_hash, plan, role FROM users WHERE email = %s;"
-    
+    query = "SELECT id, full_name, email, password_hash, plan, role, created_at FROM users WHERE email = %s;"
+
     try:
         cursor.execute(query, (email,))
         user_record = cursor.fetchone()
         if user_record:
-            user_id, full_name, hashed_pwd, plan, role = user_record
+            user_id, full_name, user_email, hashed_pwd, plan, role, created_at = user_record
             if verify_password(password, hashed_pwd):
-                return {"id": str(user_id), "full_name": full_name, "plan": plan, "role": role}
+                return {
+                    "id": str(user_id),
+                    "full_name": full_name,
+                    "email": user_email,
+                    "plan": plan,
+                    "role": role,
+                    "created_at": created_at.isoformat() if created_at else None,
+                }
         return None
     finally:
         cursor.close()
