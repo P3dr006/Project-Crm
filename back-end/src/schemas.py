@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from enum import Enum
 from typing import Optional
+from datetime import datetime
 
 # --- ENUMS (Must match the database exactly) ---
 
@@ -47,8 +48,10 @@ class UserResponse(BaseModel):
     """Data returned to the frontend (NEVER return the password)."""
     id: str
     full_name: str
+    email: str          
     plan: PlanType
     role: UserRole
+    created_at: datetime 
 
     class Config:
         from_attributes = True

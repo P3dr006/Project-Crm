@@ -5,8 +5,10 @@ import { persist } from "zustand/middleware";
 interface User {
   id: string;
   full_name: string;
+  email: string; 
   plan: string;
   role: string;
+  created_at: string;
 }
 
 // Defining the shape of our Global State
@@ -16,6 +18,9 @@ interface AuthState {
   setAuth: (user: User, token: string) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
+  
+  // Function to update partial user data (e.g., changing name in profile)
+  updateUser: (data: Partial<User>) => void; 
 }
 
 // Creating the Global Store
@@ -36,6 +41,11 @@ export const useAuthStore = create<AuthState>()(
       
       // Helper function to check if someone is logged in
       isAuthenticated: () => !!get().token,
+
+      // Function to update specific user fields without needing a full re-login
+      updateUser: (data) => set((state) => ({
+        user: state.user ? { ...state.user, ...data } : null
+      })),
     }),
     {
       name: "auth-storage", // The secure key used in localStorage

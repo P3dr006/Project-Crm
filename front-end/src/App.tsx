@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Login } from "./pages/login";
-import { Register } from "./pages/register";
-import { Dashboard } from "./pages/dashboard";
+import { Login } from "./pages/Login";
+import { Register } from "./pages/Register";
+import { Dashboard } from "./pages/Dashboard";
+import { Profile } from "./pages/profile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Toaster } from 'sonner';
 
@@ -18,7 +19,7 @@ export default function App() {
         {/* Protected Routes - Everything inside here requires a Token */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          {/* Future protected routes like /profile or /settings would go here */}
+          <Route path="/profile" element={<Profile />} />
         </Route>
 
         {/* Default Redirects */}
