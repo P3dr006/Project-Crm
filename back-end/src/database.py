@@ -1,4 +1,3 @@
-
 import logging
 
 from psycopg2 import pool, errors
@@ -91,6 +90,7 @@ def update_user(user_id: str, update_data: dict):
     finally:
         cursor.close()
         release_db_connection(conn)
+
 def authenticate_user(email, password):
     """Verifies user credentials using the connection pool."""
     conn = get_db_connection()
