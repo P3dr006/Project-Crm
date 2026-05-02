@@ -1,3 +1,4 @@
+
 import logging
 
 from psycopg2 import pool, errors
@@ -74,7 +75,22 @@ def create_user(full_name, email, raw_password):
     finally:
         cursor.close()
         release_db_connection(conn)
-
+    
+def update_user(user_id: str, update_data: dict):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    fields = ", ".join([f"{k} = %s" for k in update_data.keys()])
+    values = list(update_data.values())
+    values.append(user_id)
+    query = f"UPDATE users SET {fields} WHERE id = %s RETURNING full_name;"
+    try:
+        cursor.execute(query, tuple(values))
+        conn.commit()
+        row = cursor.fetchone()
+        return {"full_name": row[0]} if row else None
+    finally:
+        cursor.close()
+        release_db_connection(conn)
 def authenticate_user(email, password):
     """Verifies user credentials using the connection pool."""
     conn = get_db_connection()

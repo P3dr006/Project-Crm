@@ -10,8 +10,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 
 # Internal imports from your own files
-from src.database import create_user, authenticate_user, create_lead, get_leads_by_user, get_lead_by_id, delete_lead, update_lead
-from src.schemas import UserCreate, UserLogin, UserResponse, LeadCreate, LeadUpdate
+from src.database import create_user, authenticate_user, update_user, create_lead, get_leads_by_user, get_lead_by_id, delete_lead, update_lead
+from src.schemas import UserCreate, UserLogin, UserResponse, UserUpdate, LeadCreate, LeadUpdate
 from src.auth_utils import create_access_token, verify_access_token
 
 # Initialize the FastAPI application
@@ -105,6 +105,17 @@ def login(credentials: UserLogin):
         "user": user
     }
 
+@app.patch("/users/me")
+def update_profile(update_data: UserUpdate, user_id: str = Depends(get_current_user_id)):
+    """
+    Updates the user's profile information.
+    """
+    update_dict = update_data.model_dump(exclude_unset=True)
+    result = update_user(user_id, update_dict)
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    return result
+
 # --- CRM ROUTES (PROTECTED API) ---
 
 @app.post("/leads", status_code=status.HTTP_201_CREATED)
@@ -142,7 +153,7 @@ def get_lead(lead_id: str, user_id: str = Depends(get_current_user_id)):
 @app.patch("/leads/{lead_id}")
 def patch_lead(lead_id: str, lead_data: LeadUpdate, user_id: str = Depends(get_current_user_id)):
     # Convert Pydantic model to dict, removing None values
-    update_dict = lead_data.dict(exclude_unset=True)
+    update_dict = lead_data.model_dump(exclude_unset=True)
     success = update_lead(lead_id, user_id, update_dict)
     if not success: raise HTTPException(status_code=404, detail="Lead not found or no changes made")
     return {"message": "Lead updated successfully"}

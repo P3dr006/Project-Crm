@@ -56,6 +56,10 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class UserUpdate(BaseModel):
+    """Schema for updating user information. All fields are optional."""
+    full_name: Optional[str] = Field(None, min_length=3, max_length=100)
+
 # --- LEAD SCHEMAS ---
 
 class LeadCreate(BaseModel):
