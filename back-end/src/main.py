@@ -10,7 +10,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 
 # Internal imports from your own files
-from src.database import create_user, authenticate_user, update_user, create_lead, get_leads_by_user, get_lead_by_id, delete_lead, update_lead
+from typing import Optional
+from src.database import create_user, authenticate_user, update_user, get_stats, create_lead, get_leads_by_user, get_lead_by_id, delete_lead, update_lead
 from src.schemas import UserCreate, UserLogin, UserResponse, UserUpdate, LeadCreate, LeadUpdate
 from src.auth_utils import create_access_token, verify_access_token
 
@@ -115,6 +116,15 @@ def update_profile(update_data: UserUpdate, user_id: str = Depends(get_current_u
     if not result:
         raise HTTPException(status_code=404, detail="User not found")
     return result
+
+@app.get("/stats")
+def get_dashboard_stats(
+    start: Optional[str] = None, 
+    end: Optional[str] = None, 
+    user_id: str = Depends(get_current_user_id)
+):
+    """Retorna todas as métricas agregadas para o Dashboard"""
+    return get_stats(user_id, start, end)
 
 # --- CRM ROUTES (PROTECTED API) ---
 
