@@ -11,7 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Internal imports from your own files
 from typing import Optional
-from src.database import create_user, authenticate_user, update_user, get_stats, create_lead, get_leads_by_user, get_lead_by_id, delete_lead, update_lead
+from src.crud.users import create_user, authenticate_user, update_user
+from src.crud.leads import create_lead, get_leads_by_user, get_lead_by_id, delete_lead, update_lead
+from src.crud.stats import get_stats
 from src.schemas import UserCreate, UserLogin, UserResponse, UserUpdate, LeadCreate, LeadUpdate
 from src.auth_utils import create_access_token, verify_access_token
 
