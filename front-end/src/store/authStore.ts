@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 // Defining the shape of our User based on the Python UserResponse schema
 interface User {
   id: string;
+  workspace_id: string;
   full_name: string;
   email: string; 
   plan: string;

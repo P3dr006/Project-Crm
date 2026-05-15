@@ -31,17 +31,15 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_access_token(token: str):
-    """
-    Decodes the JWT token and returns the user ID.
-    This was the missing function in your local file!
-    """
+def verify_access_token(token: str) -> dict:
+    """Decodes the JWT and returns {"user_id": ..., "workspace_id": ...}."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
-        if user_id is None:
+        workspace_id: str = payload.get("workspace_id")
+        if not user_id or not workspace_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return user_id
+        return {"user_id": user_id, "workspace_id": workspace_id}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
