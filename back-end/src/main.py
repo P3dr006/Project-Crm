@@ -117,7 +117,7 @@ def get_dashboard_stats(
     end: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    return get_stats(current_user["user_id"], start, end)
+    return get_stats(current_user["workspace_id"], start, end)
 
 # --- CRM ROUTES (PROTECTED API) ---
 
