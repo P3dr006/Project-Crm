@@ -60,7 +60,7 @@ export function Dashboard() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this lead?")) return;
     try {
       await api.delete(`/leads/${id}`);
@@ -85,9 +85,13 @@ export function Dashboard() {
       setIsModalOpen(false);
       fetchLeads();
       fetchStats();
-    } catch (error) {
-      console.error(error);
-      toast.error(editingLead ? "Failed to update lead." : "Failed to create lead.");
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      const message = typeof detail === "string"
+        ? detail
+        : JSON.stringify(detail) ?? (editingLead ? "Failed to update lead." : "Failed to create lead.");
+      console.error("Lead save error:", error?.response?.data);
+      toast.error(message);
       throw error;
     }
   };

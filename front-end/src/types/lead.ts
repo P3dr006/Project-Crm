@@ -1,5 +1,5 @@
 export interface Lead {
-  id: number;
+  id: string;
   workspace_id: string;
   assigned_to?: string | null;
   full_name: string;

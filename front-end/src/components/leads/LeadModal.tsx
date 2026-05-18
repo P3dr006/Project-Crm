@@ -6,9 +6,9 @@ import type { Lead } from "../../types/lead";
 
 const leadSchema = z.object({
   full_name: z.string().min(3, "Name must be at least 3 characters"),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")).transform(v => v === "" ? undefined : v),
   phone: z.string().min(8, "Phone must be at least 8 characters"),
-  status: z.enum(['New', 'Contacted', 'In Progress', 'Qualified', 'Lost', 'Converted']),
+  status: z.enum(['New', 'In Progress', 'Qualified', 'Lost', 'Converted']),
 });
 
 export type LeadFormData = z.infer<typeof leadSchema>;
@@ -73,7 +73,6 @@ export function LeadModal({ isOpen, onClose, onSave, editingLead }: LeadModalPro
             <label className="block text-sm font-medium text-gray-700">Status</label>
             <select {...register("status")} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-white">
               <option value="New">New</option>
-              <option value="Contacted">Contacted</option>
               <option value="In Progress">In Progress</option>
               <option value="Qualified">Qualified</option>
               <option value="Lost">Lost</option>

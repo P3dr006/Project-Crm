@@ -5,7 +5,7 @@ interface LeadTableProps {
   leads: Lead[];
   isLoading: boolean;
   onEdit: (lead: Lead) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 }
 
 const SkeletonRow = () => (
@@ -55,7 +55,7 @@ export function LeadTable({ leads, isLoading, onEdit, onDelete }: LeadTableProps
                         <StatusBadge status={lead.status} />
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {new Date(lead.created_at).toLocaleDateString()}
+                        {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : "—"}
                       </td>
                       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                         <button onClick={() => onEdit(lead)} className="text-blue-600 hover:text-blue-900 mr-4 transition">Edit</button>
