@@ -38,6 +38,7 @@ class UserCreate(BaseModel):
     full_name: str = Field(..., min_length=3, max_length=100)
     email: EmailStr # Automatically validates if it has an '@' and a domain
     password: str = Field(..., min_length=6) # Enforces a minimum password length
+    company_name: Optional[str] = None
 
 class UserLogin(BaseModel):
     """Data required for a user to log in."""
@@ -47,11 +48,12 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     """Data returned to the frontend (NEVER return the password)."""
     id: str
+    workspace_id: str
     full_name: str
-    email: str          
+    email: str
     plan: PlanType
     role: UserRole
-    created_at: datetime 
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -59,6 +61,11 @@ class UserResponse(BaseModel):
 class UserUpdate(BaseModel):
     """Schema for updating user information. All fields are optional."""
     full_name: Optional[str] = Field(None, min_length=3, max_length=100)
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
 
 # --- LEAD SCHEMAS ---
 

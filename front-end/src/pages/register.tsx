@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useAuthStore } from "../store/authStore";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,8 +24,8 @@ type RegisterFormInputs = z.infer<typeof registerSchema>;
 
 export function Register() {
   const navigate = useNavigate();
+  const setAuth = useAuthStore((state) => state.setAuth);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [isSuccess, setIsSuccess] = useState(false);
 
   // 2. REACT HOOK FORM SETUP
   const {
@@ -39,21 +40,17 @@ export function Register() {
   const onSubmit = async (data: RegisterFormInputs) => {
     setApiError(null);
     try {
-      // Sending payload to our protected FastAPI backend
-      await api.post("/register", {
+      const response = await api.post("/register", {
         full_name: data.full_name,
         email: data.email,
         password: data.password,
       });
 
-      // Show success message and redirect to login after 2 seconds
-      setIsSuccess(true);
-      setTimeout(() => {
-        navigate("/login");
-      }, 2000);
-      
+      // Auto-login: store credentials and go directly to dashboard
+      setAuth(response.data.user, response.data.access_token);
+      navigate("/dashboard");
+
     } catch (error: any) {
-      // Handle unique constraint errors (e.g., email already exists)
       const errorMessage =
         error.response?.data?.detail || "An error occurred during registration.";
       setApiError(errorMessage);
@@ -77,19 +74,7 @@ export function Register() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           
-          {/* SUCCESS MESSAGE */}
-          {isSuccess ? (
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900">Account created successfully!</h3>
-              <p className="mt-2 text-sm text-gray-500">Redirecting to login...</p>
-            </div>
-          ) : (
-            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
               
               {/* FULL NAME FIELD */}
               <div>
@@ -193,7 +178,6 @@ export function Register() {
                 </button>
               </div>
             </form>
-          )}
         </div>
       </div>
     </div>

@@ -14,7 +14,7 @@ from typing import Optional
 from src.crud.users import create_user, authenticate_user, update_user
 from src.crud.leads import create_lead, get_leads_by_workspace, get_lead_by_id, delete_lead, update_lead
 from src.crud.stats import get_stats
-from src.schemas import UserCreate, UserLogin, UserResponse, UserUpdate, LeadCreate, LeadUpdate
+from src.schemas import UserCreate, UserLogin, UserResponse, UserUpdate, LeadCreate, LeadUpdate, AuthResponse
 from src.auth_utils import create_access_token, verify_access_token
 
 # Initialize the FastAPI application
@@ -51,16 +51,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 # --- AUTH ROUTES ---
 
-@app.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 def register_user(user_data: UserCreate):
     """
-    Registers a new user. 
-    Pydantic automatically filters the output to match UserResponse.
+    Registers a new user and automatically logs them in (returns JWT).
     """
     result = create_user(
         full_name=user_data.full_name,
         email=user_data.email,
-        raw_password=user_data.password
+        raw_password=user_data.password,
+        company_name=user_data.company_name
     )
     
     # Differentiating the errors for the frontend
@@ -75,10 +75,20 @@ def register_user(user_data: UserCreate):
             detail="Internal server error while creating user."
         )
     
+    access_token = create_access_token(
+        data={
+            "sub": result["id"], 
+            "workspace_id": result["workspace_id"]
+        }
+    )
     # If no errors, return the dict. Pydantic ensures it matches UserResponse.
-    return result
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": result
+    }
 
-@app.post("/login")
+@app.post("/login",response_model=AuthResponse)
 def login(credentials: UserLogin):
     """
     Authenticates a user and returns a JWT Access Token.
