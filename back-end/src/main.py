@@ -77,8 +77,9 @@ def register_user(user_data: UserCreate):
     
     access_token = create_access_token(
         data={
-            "sub": result["id"], 
-            "workspace_id": result["workspace_id"]
+            "sub": result["id"],
+            "workspace_id": result["workspace_id"],
+            "role": result["role"],
         }
     )
     # If no errors, return the dict. Pydantic ensures it matches UserResponse.
@@ -104,7 +105,7 @@ def login(credentials: UserLogin):
         )
     
     # 2. If the password is correct, generates the VIP Badge (JWT Token)
-    access_token = create_access_token(data={"sub": str(user["id"]), "workspace_id": str(user["workspace_id"])})
+    access_token = create_access_token(data={"sub": str(user["id"]), "workspace_id": str(user["workspace_id"]), "role": user["role"]})
     
     # 3. Returns the token for the frontend to store, along with user data
     return {
@@ -146,10 +147,20 @@ def create_new_lead(lead_data: LeadCreate, current_user: dict = Depends(get_curr
 def get_workspace_leads(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
+    start: Optional[str] = None,
+    end: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     offset = (page - 1) * size
-    leads = get_leads_by_workspace(workspace_id=current_user["workspace_id"], limit=size, offset=offset)
+    leads = get_leads_by_workspace(
+        workspace_id=current_user["workspace_id"],
+        user_id=current_user["user_id"],
+        role=current_user["role"],
+        start_date=start,
+        end_date=end,
+        limit=size,
+        offset=offset,
+    )
     return {"page": page, "size": size, "leads": leads}
 
 @app.get("/leads/{lead_id}")

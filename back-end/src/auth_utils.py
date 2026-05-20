@@ -32,14 +32,15 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 def verify_access_token(token: str) -> dict:
-    """Decodes the JWT and returns {"user_id": ..., "workspace_id": ...}."""
+    """Decodes the JWT and returns {"user_id", "workspace_id", "role"}."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         workspace_id: str = payload.get("workspace_id")
-        if not user_id or not workspace_id:
+        role: str = payload.get("role")
+        if not user_id or not workspace_id or not role:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return {"user_id": user_id, "workspace_id": workspace_id}
+        return {"user_id": user_id, "workspace_id": workspace_id, "role": role}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:

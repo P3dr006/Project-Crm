@@ -61,23 +61,52 @@ def get_lead_by_id(lead_id: str, workspace_id: str):
         release_db_connection(conn)
 
 
-def get_leads_by_workspace(workspace_id: str, limit: int = 50, offset: int = 0):
-    """Fetches all leads for a workspace with pagination."""
+def get_leads_by_workspace(
+    workspace_id: str, 
+    user_id: str, 
+    role: str, 
+    start_date: str = None, 
+    end_date: str = None, 
+    limit: int = 50, 
+    offset: int = 0
+):
+    """Fetches all leads for a workspace with pagination, date filters, and role-based access."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            """
+        # Base query — always scoped to the workspace for tenant isolation
+        query = """
             SELECT id, assigned_to, full_name, phone, email, status, source, created_at, updated_at
             FROM leads
             WHERE workspace_id = %s
-            ORDER BY created_at DESC
-            LIMIT %s OFFSET %s;
-            """,
-            (workspace_id, limit, offset)
-        )
+        """
+        params = [workspace_id]
+
+        # Role-based access: Employees only see leads assigned to them
+        if role == "Employee":
+            query += " AND assigned_to = %s"
+            params.append(user_id)
+
+        # Optional date range filters
+        if start_date:
+            query += " AND created_at >= %s"
+            params.append(start_date)
+
+        if end_date:
+            # Append 23:59:59 so the end date is inclusive for the full day
+            query += " AND created_at <= %s"
+            params.append(f"{end_date} 23:59:59")
+
+        # Sorting and pagination always applied last
+        query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+
+        cursor.execute(query, tuple(params))
+
+        # Serialize UUIDs and datetimes to JSON-safe strings
         columns = [desc[0] for desc in cursor.description]
         leads = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
         for lead in leads:
             lead["id"] = str(lead["id"])
             if lead.get("assigned_to"):
@@ -86,6 +115,7 @@ def get_leads_by_workspace(workspace_id: str, limit: int = 50, offset: int = 0):
                 lead["created_at"] = lead["created_at"].isoformat()
             if lead.get("updated_at"):
                 lead["updated_at"] = lead["updated_at"].isoformat()
+
         return leads
     finally:
         cursor.close()
