@@ -8,14 +8,15 @@ logger = logging.getLogger(__name__)
 def get_stats(workspace_id: str, start_date: str = None, end_date: str = None):
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    
+
     try:
         date_filter = ""
         params = [workspace_id]
-        
+
         if start_date and end_date:
             date_filter = "AND created_at >= %s AND created_at <= %s"
-            params.extend([start_date, end_date])
+            # Append 23:59:59 so the end date is inclusive for the full day
+            params.extend([start_date, f"{end_date} 23:59:59"])
             
         # 1. KPIs: total, new, converted and conversion rate
         cursor.execute(f"""
