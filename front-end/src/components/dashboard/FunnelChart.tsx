@@ -8,7 +8,7 @@ export function FunnelChart({ data }: { data: any[] }) {
         <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
           <XAxis type="number" />
-          <YAxis dataKey="name" type="category" tick={{fontSize: 12}} width={80} />
+          <YAxis dataKey="name" type="category" tick={{fontSize: 11}} width={95} />
           <Tooltip cursor={{fill: 'transparent'}} />
           <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={30} />
         </BarChart>

@@ -37,7 +37,11 @@ export function Dashboard() {
   const fetchLeads = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get("/leads");
+      let url = "/leads";
+      if (dateFilter.start && dateFilter.end) {
+        url += `?start=${dateFilter.start}&end=${dateFilter.end}`;
+      }
+      const response = await api.get(url);
       setLeads(response.data.leads || response.data);
     } catch (error) {
       console.error("Error fetching leads:", error);
@@ -49,11 +53,8 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchStats();
-  }, [dateFilter]);
-
-  useEffect(() => {
     fetchLeads();
-  }, []);
+  }, [dateFilter]);
 
   const handleOpenEditModal = (lead: Lead) => {
     setEditingLead(lead);
@@ -121,12 +122,10 @@ export function Dashboard() {
         </div>
 
         {/* CHARTS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
           <LeadsLineChart data={stats?.chart || []} />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <FunnelChart data={stats?.funnel || []} />
-            <SourcePieChart data={stats?.sources || []} />
-          </div>
+          <FunnelChart data={stats?.funnel || []} />
+          <SourcePieChart data={stats?.sources || []} />
         </div>
 
         {/* LEADS TABLE */}
