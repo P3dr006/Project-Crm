@@ -7,6 +7,7 @@ export function Navbar() {
 
   const navLinks = [
     { to: "/dashboard", label: "Dashboard" },
+    { to: "/kanban", label: "Kanban" },
     { to: "/profile", label: "Profile" },
   ];
 
