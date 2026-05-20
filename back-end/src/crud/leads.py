@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 from src.database import get_db_connection, release_db_connection
 
 logger = logging.getLogger(__name__)
@@ -14,12 +15,12 @@ def create_lead(workspace_id: str, user_id: str, lead_data):
     try:
         cursor.execute(
             """
-            INSERT INTO leads (workspace_id, assigned_to, full_name, phone, email, status, source)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO leads (workspace_id, assigned_to, full_name, phone, email, status, source, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id;
             """,
             (workspace_id, user_id, lead_data.full_name, lead_data.phone,
-             lead_data.email, lead_data.status.value, lead_data.source.value)
+             lead_data.email, lead_data.status.value, lead_data.source.value, lead_data.notes)
         )
         lead_id = cursor.fetchone()[0]
         conn.commit()
@@ -62,12 +63,12 @@ def get_lead_by_id(lead_id: str, workspace_id: str):
 
 
 def get_leads_by_workspace(
-    workspace_id: str, 
-    user_id: str, 
-    role: str, 
-    start_date: str = None, 
-    end_date: str = None, 
-    limit: int = 50, 
+    workspace_id: str,
+    user_id: str,
+    role: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 50,
     offset: int = 0
 ):
     """Fetches all leads for a workspace with pagination, date filters, and role-based access."""
@@ -120,7 +121,6 @@ def get_leads_by_workspace(
     finally:
         cursor.close()
         release_db_connection(conn)
-
 
 def update_lead(lead_id: str, workspace_id: str, update_data: dict):
     """Updates allowed lead fields, scoped to the workspace."""

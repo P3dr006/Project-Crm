@@ -73,15 +73,17 @@ class LeadCreate(BaseModel):
     """Data required to create a new lead."""
     full_name: str = Field(..., min_length=2, max_length=100)
     phone: str = Field(..., min_length=8, max_length=20)
-    email: Optional[EmailStr] = None # Email is optional for leads
-    status: LeadStatus = LeadStatus.new # Defaults to 'New'
-    source: LeadSource = LeadSource.other # Defaults to 'Other'
+    email: Optional[EmailStr] = None
+    status: LeadStatus = LeadStatus.new
+    source: LeadSource = LeadSource.other
+    notes: Optional[str] = None
 
 class LeadUpdate(BaseModel):
     """Schema for updating leads. All fields are optional."""
     full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     phone: Optional[str] = Field(None, min_length=8, max_length=20)
     email: Optional[EmailStr] = None
-    status: Optional[LeadStatus] = None # Enums can be validated in the logic
+    status: Optional[LeadStatus] = None
     source: Optional[LeadSource] = None
+    notes: Optional[str] = None
 
