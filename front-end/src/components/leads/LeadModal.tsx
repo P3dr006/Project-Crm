@@ -4,7 +4,6 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Lead } from "../../types/lead";
 
-// Schema validates form inputs — no transforms so the resolver type stays clean
 const leadSchema = z.object({
   full_name: z.string().min(3, "Name must be at least 3 characters"),
   email: z.union([z.email("Invalid email address"), z.literal("")]).optional(),
@@ -12,11 +11,11 @@ const leadSchema = z.object({
   status: z.enum(["New", "In Progress", "Qualified", "Lost", "Converted"]),
   source: z.enum(["Instagram", "WhatsApp", "Website", "Referral", "Other"]),
   notes: z.string().optional(),
+  next_contact_date: z.string().optional(),
 });
 
 type LeadFormValues = z.infer<typeof leadSchema>;
 
-// Clean type sent to the API — empty strings collapsed to undefined
 export type LeadFormData = {
   full_name: string;
   phone: string;
@@ -24,6 +23,7 @@ export type LeadFormData = {
   status: "New" | "In Progress" | "Qualified" | "Lost" | "Converted";
   source: "Instagram" | "WhatsApp" | "Website" | "Referral" | "Other";
   notes?: string;
+  next_contact_date?: string;
 };
 
 interface LeadModalProps {
@@ -48,9 +48,12 @@ export function LeadModal({ isOpen, onClose, onSave, editingLead }: LeadModalPro
         status: editingLead.status,
         source: editingLead.source,
         notes: editingLead.notes || "",
+        next_contact_date: editingLead.next_contact_date
+          ? new Date(editingLead.next_contact_date).toISOString().slice(0, 16)
+          : "",
       });
     } else {
-      reset({ full_name: "", email: "", phone: "", status: "New", source: "Other", notes: "" });
+      reset({ full_name: "", email: "", phone: "", status: "New", source: "Other", notes: "", next_contact_date: "" });
     }
   }, [editingLead, reset, isOpen]);
 
@@ -59,6 +62,7 @@ export function LeadModal({ isOpen, onClose, onSave, editingLead }: LeadModalPro
       ...values,
       email: values.email || undefined,
       notes: values.notes || undefined,
+      next_contact_date: values.next_contact_date || undefined,
     });
   };
 
@@ -117,6 +121,17 @@ export function LeadModal({ isOpen, onClose, onSave, editingLead }: LeadModalPro
                 <option value="Other">Other</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Schedule Callback <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              type="datetime-local"
+              {...register("next_contact_date")}
+              className={inputClass}
+            />
           </div>
 
           <div>
