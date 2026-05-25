@@ -78,6 +78,7 @@ class LeadCreate(BaseModel):
     status: LeadStatus = LeadStatus.new
     source: LeadSource = LeadSource.other
     notes: Optional[str] = None
+    next_contact_date: Optional[str] = None
 
 class LeadUpdate(BaseModel):
     """Schema for updating leads. All fields are optional."""

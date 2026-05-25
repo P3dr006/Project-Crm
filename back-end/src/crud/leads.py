@@ -16,12 +16,13 @@ def create_lead(workspace_id: str, user_id: str, lead_data):
     try:
         cursor.execute(
             """
-            INSERT INTO leads (workspace_id, assigned_to, full_name, phone, email, status, source, notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO leads (workspace_id, assigned_to, full_name, phone, email, status, source, notes, next_contact_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id;
             """,
             (workspace_id, user_id, lead_data.full_name, lead_data.phone,
-             lead_data.email, lead_data.status.value, lead_data.source.value, lead_data.notes)
+             lead_data.email, lead_data.status.value, lead_data.source.value,
+             lead_data.notes, lead_data.next_contact_date)
         )
         lead_id = cursor.fetchone()[0]
         conn.commit()
