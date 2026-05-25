@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, Field
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
+from uuid import UUID
 
 # --- ENUMS (Must match the database exactly) ---
 
@@ -86,4 +87,42 @@ class LeadUpdate(BaseModel):
     status: Optional[LeadStatus] = None
     source: Optional[LeadSource] = None
     notes: Optional[str] = None
+    next_contact_date: Optional[str] = None
 
+
+# --- EVENT SCHEMAS ---
+
+class EventCreate(BaseModel):
+    """Data required to create a new event (meeting or callback)."""
+    title: str = Field(..., min_length=3, max_length=200)
+    scheduled_at: datetime
+    type: Literal["meeting", "callback"] = "meeting"
+    assigned_to: Optional[UUID] = None
+    lead_id: Optional[UUID] = None
+    notes: Optional[str] = None
+
+class EventUpdate(BaseModel):
+    """Schema for updating an event. All fields are optional."""
+    title: Optional[str] = Field(None, max_length=200)
+    scheduled_at: Optional[datetime] = None
+    status: Optional[Literal["pending", "done", "cancelled"]] = None
+    notes: Optional[str] = None
+    assigned_to: Optional[UUID] = None
+
+class EventResponse(BaseModel):
+    """Data returned to the frontend for an event."""
+    id: UUID
+    workspace_id: UUID
+    created_by: UUID
+    assigned_to: UUID
+    lead_id: Optional[UUID] = None
+    type: str
+    title: str
+    notes: Optional[str] = None
+    scheduled_at: datetime
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

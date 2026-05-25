@@ -2,6 +2,7 @@ import logging
 from psycopg2 import errors
 from src.database import get_db_connection, release_db_connection
 from src.auth_utils import hash_password, verify_password
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,28 @@ def authenticate_user(email, password):
         cursor.close()
         release_db_connection(conn)
 
+def get_workspace_members(workspace_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            '''
+            SELECT id, full_name, email, role 
+            FROM users 
+            WHERE workspace_id = %s
+            ORDER BY full_name ASC;
+            ''',
+            (workspace_id,)
+        )
+        columns = [desc[0] for desc in cursor.description]
+        members = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        for m in members:
+            m["id"] = str(m["id"])
+        return members
+    finally:
+        cursor.close()
+        release_db_connection(conn)
 
 def update_user(user_id: str, update_data: dict):
     """Updates allowed user profile fields."""

@@ -135,19 +135,19 @@ CREATE TABLE IF NOT EXISTS contracts (
     signed_at       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE events (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE IF NOT EXISTS events (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     created_by      UUID NOT NULL REFERENCES users(id),
     assigned_to     UUID NOT NULL REFERENCES users(id),
     lead_id         UUID REFERENCES leads(id) ON DELETE SET NULL,
-    type            VARCHAR(20) NOT NULL DEFAULT 'meeting', -- 'meeting' | 'callback'
+    type            VARCHAR(20) NOT NULL DEFAULT 'meeting' CHECK (type IN ('meeting', 'callback')),
     title           VARCHAR(200) NOT NULL,
     notes           TEXT,
-    scheduled_at    TIMESTAMP NOT NULL,
-    status          VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending' | 'done' | 'cancelled'
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    scheduled_at    TIMESTAMP WITH TIME ZONE NOT NULL,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'cancelled')),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 
@@ -169,6 +169,11 @@ CREATE TRIGGER trg_leads_updated_at
     BEFORE UPDATE ON leads
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_events_updated_at ON events;
+CREATE TRIGGER trg_events_updated_at
+    BEFORE UPDATE ON events
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 
 -- =============================================================================
 -- 5. INDEXES
@@ -185,6 +190,11 @@ CREATE INDEX IF NOT EXISTS idx_leads_workspace_status   ON leads(workspace_id, s
 
 -- Contracts
 CREATE INDEX IF NOT EXISTS idx_contracts_workspace_id   ON contracts(workspace_id);
+
+-- Events — covers the most common queries: events per workspace, per assignee, and upcoming by date
+CREATE INDEX IF NOT EXISTS idx_events_workspace_id  ON events(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_events_assigned_to   ON events(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_events_scheduled_at  ON events(scheduled_at);
 
 -- Invitations — token lookup (accept flow) + email lookup (duplicate check)
 CREATE INDEX IF NOT EXISTS idx_invitations_token        ON invitations(token);
