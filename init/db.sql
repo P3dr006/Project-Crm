@@ -135,6 +135,21 @@ CREATE TABLE IF NOT EXISTS contracts (
     signed_at       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    created_by      UUID NOT NULL REFERENCES users(id),
+    assigned_to     UUID NOT NULL REFERENCES users(id),
+    lead_id         UUID REFERENCES leads(id) ON DELETE SET NULL,
+    type            VARCHAR(20) NOT NULL DEFAULT 'meeting', -- 'meeting' | 'callback'
+    title           VARCHAR(200) NOT NULL,
+    notes           TEXT,
+    scheduled_at    TIMESTAMP NOT NULL,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending' | 'done' | 'cancelled'
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 -- =============================================================================
 -- 4. FUNCTIONS & TRIGGERS

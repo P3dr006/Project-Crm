@@ -4,6 +4,7 @@ import { Register } from "./pages/Register";
 import { Dashboard } from "./pages/Dashboard";
 import { Kanban } from "./pages/Kanban";
 import { Profile } from "./pages/Profile";
+import { Agenda } from "./pages/Agenda";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Toaster } from 'sonner';
 
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/agenda" element={<Agenda />} />
         </Route>
 
         {/* Default Redirects */}

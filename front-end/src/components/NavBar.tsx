@@ -9,6 +9,7 @@ export function Navbar() {
     { to: "/dashboard", label: "Dashboard" },
     { to: "/kanban", label: "Kanban" },
     { to: "/profile", label: "Profile" },
+    { to: "/agenda", label: "Agenda" },
   ];
 
   return (
