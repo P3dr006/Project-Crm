@@ -1,11 +1,13 @@
 import logging
 import psycopg2.extras
+from typing import Optional
 from src.database import get_db_connection, release_db_connection
 
 
 logger = logging.getLogger(__name__)
 
-def get_stats(workspace_id: str, start_date: str = None, end_date: str = None):
+def get_stats(workspace_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Returns KPIs, funnel, source distribution, and leads-over-time chart for the workspace."""
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
