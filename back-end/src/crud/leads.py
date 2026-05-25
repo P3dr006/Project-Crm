@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from fastapi import HTTPException
 from src.database import get_db_connection, release_db_connection
 
 logger = logging.getLogger(__name__)
@@ -34,8 +35,8 @@ def create_lead(workspace_id: str, user_id: str, lead_data):
         release_db_connection(conn)
 
 
-def get_lead_by_id(lead_id: str, workspace_id: str):
-    """Fetches a single lead, ensuring it belongs to the requesting workspace."""
+def get_lead_by_id(lead_id: str, workspace_id: str, user_id: str = None, role: str = None):
+    """Fetches a single lead. Employees can only fetch leads assigned to them."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -48,6 +49,10 @@ def get_lead_by_id(lead_id: str, workspace_id: str):
             return None
         columns = [desc[0] for desc in cursor.description]
         lead = dict(zip(columns, row))
+
+        if role == "Employee" and str(lead.get("assigned_to")) != user_id:
+            raise HTTPException(status_code=403, detail="Access denied to this lead.")
+
         lead["id"] = str(lead["id"])
         lead["workspace_id"] = str(lead["workspace_id"])
         if lead.get("assigned_to"):
@@ -56,6 +61,8 @@ def get_lead_by_id(lead_id: str, workspace_id: str):
             lead["created_at"] = lead["created_at"].isoformat()
         if lead.get("updated_at"):
             lead["updated_at"] = lead["updated_at"].isoformat()
+        if lead.get("next_contact_date"):
+            lead["next_contact_date"] = lead["next_contact_date"].isoformat()
         return lead
     finally:
         cursor.close()
@@ -77,7 +84,8 @@ def get_leads_by_workspace(
     try:
         # Base query — always scoped to the workspace for tenant isolation
         query = """
-            SELECT id, assigned_to, full_name, phone, email, status, source, created_at, updated_at
+            SELECT id, assigned_to, full_name, phone, email, status, source,
+                   notes, next_contact_date, created_at, updated_at
             FROM leads
             WHERE workspace_id = %s
         """
@@ -116,30 +124,43 @@ def get_leads_by_workspace(
                 lead["created_at"] = lead["created_at"].isoformat()
             if lead.get("updated_at"):
                 lead["updated_at"] = lead["updated_at"].isoformat()
+            if lead.get("next_contact_date"):
+                lead["next_contact_date"] = lead["next_contact_date"].isoformat()
 
         return leads
     finally:
         cursor.close()
         release_db_connection(conn)
 
-def update_lead(lead_id: str, workspace_id: str, update_data: dict):
-    """Updates allowed lead fields, scoped to the workspace."""
+def update_lead(lead_id: str, workspace_id: str, update_data: dict, user_id: str = None, role: str = None):
+    """Updates allowed lead fields. Employees can only update leads assigned to them."""
     safe_data = {k: v for k, v in update_data.items() if k in _UPDATABLE_FIELDS}
     if not safe_data:
         return False
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    fields = ", ".join([f"{k} = %s" for k in safe_data.keys()])
-    values = list(safe_data.values())
-    values.extend([lead_id, workspace_id])
     try:
+        if role == "Employee":
+            cursor.execute(
+                "SELECT assigned_to FROM leads WHERE id = %s AND workspace_id = %s;",
+                (lead_id, workspace_id)
+            )
+            row = cursor.fetchone()
+            if not row or str(row[0]) != user_id:
+                raise HTTPException(status_code=403, detail="Access denied to this lead.")
+
+        fields = ", ".join([f"{k} = %s" for k in safe_data.keys()])
+        values = list(safe_data.values())
+        values.extend([lead_id, workspace_id])
         cursor.execute(
             f"UPDATE leads SET {fields}, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND workspace_id = %s;",
             tuple(values)
         )
         conn.commit()
         return cursor.rowcount > 0
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error updating lead %s: %s", lead_id, e)
         conn.rollback()
@@ -149,8 +170,11 @@ def update_lead(lead_id: str, workspace_id: str, update_data: dict):
         release_db_connection(conn)
 
 
-def delete_lead(lead_id: str, workspace_id: str):
-    """Permanently deletes a lead, scoped to the workspace."""
+def delete_lead(lead_id: str, workspace_id: str, role: str = None):
+    """Permanently deletes a lead. Only Owners and Managers can delete leads."""
+    if role == "Employee":
+        raise HTTPException(status_code=403, detail="Employees are not allowed to delete leads.")
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -160,6 +184,10 @@ def delete_lead(lead_id: str, workspace_id: str):
         )
         conn.commit()
         return cursor.rowcount > 0
+    except Exception as e:
+        logger.error("Error deleting lead %s: %s", lead_id, e)
+        conn.rollback()
+        return False
     finally:
         cursor.close()
         release_db_connection(conn)

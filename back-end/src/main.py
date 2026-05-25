@@ -178,7 +178,12 @@ def get_workspace_leads(
 
 @app.get("/leads/{lead_id}")
 def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
-    lead = get_lead_by_id(lead_id, current_user["workspace_id"])
+    lead = get_lead_by_id(
+        lead_id,
+        current_user["workspace_id"],
+        user_id=current_user["user_id"],
+        role=current_user["role"],
+    )
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
@@ -187,7 +192,13 @@ def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
 @app.patch("/leads/{lead_id}")
 def patch_lead(lead_id: str, lead_data: LeadUpdate, current_user: dict = Depends(get_current_user)):
     update_dict = lead_data.model_dump(exclude_unset=True)
-    success = update_lead(lead_id, current_user["workspace_id"], update_dict)
+    success = update_lead(
+        lead_id,
+        current_user["workspace_id"],
+        update_dict,
+        user_id=current_user["user_id"],
+        role=current_user["role"],
+    )
     if not success:
         raise HTTPException(status_code=404, detail="Lead not found or no changes made")
     return {"message": "Lead updated successfully"}
@@ -195,7 +206,7 @@ def patch_lead(lead_id: str, lead_data: LeadUpdate, current_user: dict = Depends
 
 @app.delete("/leads/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
-    success = delete_lead(lead_id, current_user["workspace_id"])
+    success = delete_lead(lead_id, current_user["workspace_id"], role=current_user["role"])
     if not success:
         raise HTTPException(status_code=404, detail="Lead not found")
 
