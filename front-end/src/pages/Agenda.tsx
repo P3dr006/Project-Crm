@@ -1,280 +1,313 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { Navbar } from "../components/NavBar";
+import { EventModal } from "../components/EventModal";
+import { 
+  Calendar as CalendarIcon, Phone, Plus, AlertCircle, 
+  CheckCircle2, XCircle, MessageSquare, ChevronLeft, 
+  ChevronRight, Video 
+} from "lucide-react";
 import { toast } from "sonner";
-import { Phone, Calendar as CalendarIcon, AlertCircle, CheckCircle2, XCircle, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
+import type { Event } from "../types/events";
 import type { Lead } from "../types/lead";
+import { useAuthStore } from "../store/authStore";
 
 export function Agenda() {
+  const user = useAuthStore((s) => s.user);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // State to control the currently visible calendar month
+  // Navegação
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Filtros do Painel Direito
+  const [typeFilter, setTypeFilter] = useState<"all" | "callback" | "meeting">("all");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  const fetchFollowUps = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await api.get("/leads?size=100");
-      const data = response.data.leads || response.data;
-      const scheduledLeads = data.filter((l: Lead) => l.next_contact_date);
-      setLeads(scheduledLeads);
+      const [leadsRes, eventsRes] = await Promise.all([
+        api.get("/leads?size=100"),
+        api.get("/events")
+      ]);
+      const allLeads = leadsRes.data.leads || leadsRes.data;
+      setLeads(allLeads.filter((l: Lead) => l.next_contact_date));
+      setEvents(eventsRes.data);
     } catch {
-      toast.error("Failed to load your schedule.");
+      toast.error("Failed to load schedule");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchFollowUps();
-  }, [fetchFollowUps]);
+    fetchData();
+  }, [fetchData]);
 
-  // QUICK ACTIONS
+  // --- AÇÕES RÁPIDAS ---
   const handleCallFailed = async (leadId: string) => {
     try {
-      setLeads((prev) => prev.filter((l) => l.id !== leadId));
-      await api.patch(`/leads/${leadId}`, {
-        status: "Lost",
-        notes: `[System Note] Call attempted but client did not answer or was lost.`,
-      });
-      toast.success("Lead marked as Lost/No Answer.");
-    } catch {
-      toast.error("Failed to update lead.");
-      fetchFollowUps();
-    }
+      setLeads(prev => prev.filter(l => l.id !== leadId));
+      await api.patch(`/leads/${leadId}`, { status: "Lost", notes: `[System] Call attempt failed/No answer.` });
+      toast.success("Marked as Lost/No Answer.");
+    } catch { fetchData(); }
   };
 
   const handleCallSuccess = async (leadId: string) => {
     try {
-      setLeads((prev) => prev.filter((l) => l.id !== leadId));
-      await api.patch(`/leads/${leadId}`, {
-        status: "In Progress",
-        notes: `[System Note] Contact established. Moving forward with the sales process.`,
-      });
-      toast.success("Lead successfully moved to In Progress! 🚀");
-    } catch {
-      toast.error("Failed to update lead.");
-      fetchFollowUps();
-    }
+      setLeads(prev => prev.filter(l => l.id !== leadId));
+      await api.patch(`/leads/${leadId}`, { status: "In Progress", next_contact_date: null });
+      toast.success("Moved to In Progress!");
+    } catch { fetchData(); }
   };
 
-  // Column separation
-  const getCategorizedLeads = () => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    return {
-      overdue: leads.filter((l) => l.next_contact_date! < todayStr && l.status !== "Converted" && l.status !== "Lost"),
-      today: leads.filter((l) => l.next_contact_date!.startsWith(todayStr)),
-      upcoming: leads.filter((l) => l.next_contact_date! > todayStr),
-    };
+  const handleEventComplete = async (eventId: string) => {
+    try {
+      setEvents(prev => prev.map(e => e.id === eventId ? { ...e, status: "done" } : e));
+      await api.patch(`/events/${eventId}`, { status: "done" });
+      toast.success("Meeting marked as done.");
+    } catch { fetchData(); }
   };
 
-  const { overdue, today, upcoming } = getCategorizedLeads();
+  // --- NORMALIZAÇÃO DE DADOS (Junta Leads e Eventos numa única lista) ---
+  const normalizedItems = useMemo(() => {
+    const items: any[] = [];
+    const now = new Date();
+    
+    leads.forEach(lead => {
+      if (lead.status === "Converted" || lead.status === "Lost") return;
+      const dateObj = new Date(lead.next_contact_date!);
+      const isOverdue = dateObj < now;
+      items.push({ id: `lead_${lead.id}`, rawId: lead.id, type: "callback", title: lead.full_name, time: dateObj, isOverdue, data: lead });
+    });
 
-  // ==========================================
-  // CALENDAR LOGIC
-  // ==========================================
+    events.forEach(ev => {
+      if (ev.status === "cancelled" || ev.status === "done") return;
+      const dateObj = new Date(ev.scheduled_at);
+      const isOverdue = dateObj < now;
+      items.push({ id: `ev_${ev.id}`, rawId: ev.id, type: "meeting", title: ev.title, time: dateObj, isOverdue, data: ev });
+    });
+
+    return items;
+  }, [leads, events]);
+
+  // --- LÓGICA DO PAINEL DIREITO (Selecionados e Atrasados) ---
+  const selectedDayItems = useMemo(() => {
+    let items = normalizedItems.filter(item => 
+      item.time.getDate() === selectedDate.getDate() &&
+      item.time.getMonth() === selectedDate.getMonth() &&
+      item.time.getFullYear() === selectedDate.getFullYear()
+    );
+
+    if (typeFilter !== "all") items = items.filter(i => i.type === typeFilter);
+
+    items.sort((a, b) => sortOrder === "asc" ? a.time.getTime() - b.time.getTime() : b.time.getTime() - a.time.getTime());
+    return items;
+  }, [normalizedItems, selectedDate, typeFilter, sortOrder]);
+
+  const overdueItems = useMemo(() => {
+    return normalizedItems.filter(i => i.isOverdue).sort((a, b) => a.time.getTime() - b.time.getTime());
+  }, [normalizedItems]);
+
+  // --- VARIÁVEIS DO CALENDÁRIO ---
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
   const todayDate = new Date();
-
-  const prevMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
-  const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
-
-  // Checks whether a specific day has scheduled follow-ups
-  const getLeadsForDay = (day: number) => {
-    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return leads.filter(l => l.next_contact_date?.startsWith(dateStr));
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar />
 
-      <main className="py-8 px-6 flex-1 max-w-[1600px] w-full mx-auto flex flex-col">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Sales Schedule</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Manage your daily follow-ups and customer callbacks with quick actions.
-          </p>
+      <main className="py-8 px-6 flex-1 max-w-[1600px] w-full mx-auto flex flex-col lg:flex-row gap-8 items-start">
+        
+        {/* ================================================== */}
+        {/* COLUNA ESQUERDA: O GRANDE CALENDÁRIO               */}
+        {/* ================================================== */}
+        <div className="w-full lg:w-2/3 bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <CalendarIcon className="w-6 h-6 text-blue-600" />
+                {currentMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">Select a day to view its detailed schedule.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all"><ChevronLeft className="w-5 h-5 text-gray-600"/></button>
+                <button onClick={() => setCurrentMonth(new Date())} className="px-3 text-sm font-medium text-gray-600 hover:text-gray-900">Today</button>
+                <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all"><ChevronRight className="w-5 h-5 text-gray-600"/></button>
+              </div>
+              <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors">
+                <Plus className="w-4 h-4" /> New Meeting
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-xl overflow-hidden">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="bg-gray-50 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">{day}</div>
+            ))}
+            
+            {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+              <div key={`empty-${i}`} className="bg-white min-h-[110px] p-2" />
+            ))}
+
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const isSelected = selectedDate.getDate() === day && selectedDate.getMonth() === currentMonth.getMonth() && selectedDate.getFullYear() === currentMonth.getFullYear();
+              const isToday = todayDate.getDate() === day && todayDate.getMonth() === currentMonth.getMonth() && todayDate.getFullYear() === currentMonth.getFullYear();
+              
+              // Busca itens apenas para esta célula
+              const dayItems = normalizedItems.filter(item => item.time.getDate() === day && item.time.getMonth() === currentMonth.getMonth() && item.time.getFullYear() === currentMonth.getFullYear());
+              const callbacks = dayItems.filter(item => item.type === 'callback');
+              const meetings = dayItems.filter(item => item.type === 'meeting');
+              const hasOverdue = dayItems.some(item => item.isOverdue);
+
+              return (
+                <div 
+                  key={day} 
+                  onClick={() => setSelectedDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day))}
+                  className={`min-h-[110px] p-2 relative cursor-pointer transition-all border border-transparent 
+                    ${isSelected ? 'bg-blue-50/60 border-blue-300 ring-1 ring-blue-500 z-10' : 'bg-white hover:bg-gray-50 border-gray-100'}
+                  `}
+                >
+                  <div className="flex justify-between items-start">
+                    <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-md' : isSelected ? 'text-blue-800' : 'text-gray-700'}`}>
+                      {day}
+                    </span>
+                    {hasOverdue && <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm animate-pulse mt-1" title="Contains overdue action!"></div>}
+                  </div>
+                  
+                  {/* INDICADORES DO CALENDÁRIO */}
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {dayItems.length > 3 ? (
+                      <>
+                        {callbacks.length > 0 && <div className="text-[10px] font-medium text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded flex items-center gap-1"><Phone className="w-2.5 h-2.5"/> {callbacks.length} Calls</div>}
+                        {meetings.length > 0 && <div className="text-[10px] font-medium text-purple-700 bg-purple-100/80 px-1.5 py-0.5 rounded flex items-center gap-1"><Video className="w-2.5 h-2.5"/> {meetings.length} Mtgs</div>}
+                      </>
+                    ) : (
+                      dayItems.map(item => (
+                        <div key={item.id} className={`text-[10px] font-medium px-1.5 py-0.5 rounded truncate flex items-center gap-1 border ${
+                          item.isOverdue ? 'bg-red-50 text-red-700 border-red-200' : 
+                          item.type === 'callback' ? 'bg-blue-50/50 text-blue-700 border-blue-100' : 'bg-purple-50/50 text-purple-700 border-purple-100'
+                        }`}>
+                          {item.type === 'callback' ? <Phone className="w-2.5 h-2.5 shrink-0"/> : <Video className="w-2.5 h-2.5 shrink-0"/>}
+                          <span className="truncate">{item.title}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {isLoading ? (
-          <div className="animate-pulse space-y-6">
-            <div className="h-64 bg-gray-200 rounded-xl w-full" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3].map((n) => <div key={n} className="bg-gray-200 rounded-xl h-96" />)}
+        {/* ================================================== */}
+        {/* COLUNA DIREITA: INFORMAÇÕES DETALHADAS E FILTROS   */}
+        {/* ================================================== */}
+        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+          
+          {/* PAINEL DE ATRASADOS (Sempre visível se houver pendências passadas) */}
+          {overdueItems.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-red-800 font-bold flex items-center gap-2 mb-4">
+                <AlertCircle className="w-5 h-5"/> Action Required (Overdue)
+              </h3>
+              <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+                {overdueItems.map(item => (
+                  <DetailCard key={item.id} item={item} onCallFailed={handleCallFailed} onCallSuccess={handleCallSuccess} onEventComplete={handleEventComplete} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* PAINEL DO DIA SELECIONADO (Com Filtros) */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex-1 flex flex-col">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-5 gap-3 border-b pb-4">
+              <h3 className="font-bold text-gray-900 text-lg tracking-tight">
+                {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric'})}
+              </h3>
+              
+              <div className="flex gap-2">
+                <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as any)} className="text-xs font-medium border border-gray-200 bg-gray-50 rounded-md py-1.5 pl-2 pr-6 text-gray-700 focus:ring-blue-500 cursor-pointer outline-none">
+                  <option value="all">All Types</option>
+                  <option value="callback">📞 Callbacks</option>
+                  <option value="meeting">📅 Meetings</option>
+                </select>
+                <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as any)} className="text-xs font-medium border border-gray-200 bg-gray-50 rounded-md py-1.5 pl-2 pr-6 text-gray-700 focus:ring-blue-500 cursor-pointer outline-none">
+                  <option value="asc">Oldest First</option>
+                  <option value="desc">Newest First</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+              {selectedDayItems.length === 0 ? (
+                <div className="text-center py-10 flex flex-col items-center">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                    <CheckCircle2 className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm text-gray-500 font-medium">No tasks for this specific day.</p>
+                </div>
+              ) : (
+                selectedDayItems.map(item => (
+                  <DetailCard key={item.id} item={item} onCallFailed={handleCallFailed} onCallSuccess={handleCallSuccess} onEventComplete={handleEventComplete} />
+                ))
+              )}
             </div>
           </div>
-        ) : (
-          <div className="space-y-8">
-            
-            {/* THE NEW CALENDAR BLOCK */}
-            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5 text-blue-600" />
-                  {currentMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <button onClick={prevMonth} className="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-600">
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button onClick={nextMonth} className="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-600">
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Weekday Grid */}
-              <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="bg-gray-50 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {day}
-                  </div>
-                ))}
-                
-                {/* Empty spaces before day 1 */}
-                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                  <div key={`empty-${i}`} className="bg-white min-h-[80px] p-2" />
-                ))}
-
-                {/* The days of the month */}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const isToday = day === todayDate.getDate() && currentMonth.getMonth() === todayDate.getMonth() && currentMonth.getFullYear() === todayDate.getFullYear();
-                  const dayLeads = getLeadsForDay(day);
-                  const hasOverdue = dayLeads.some(l => l.next_contact_date! < todayDate.toISOString().split("T")[0]);
-
-                  return (
-                    <div key={day} className={`bg-white min-h-[80px] p-2 relative transition-colors hover:bg-gray-50 ${isToday ? 'bg-blue-50/30' : ''}`}>
-                      <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-gray-700'}`}>
-                        {day}
-                      </span>
-                      
-                      {/* Task indicators */}
-                      {dayLeads.length > 0 && (
-                        <div className="mt-1 flex flex-col gap-1">
-                          {dayLeads.slice(0, 2).map(l => (
-                            <div key={l.id} className={`text-[10px] px-1.5 py-0.5 rounded truncate ${hasOverdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                              {l.full_name.split(' ')[0]}
-                            </div>
-                          ))}
-                          {dayLeads.length > 2 && (
-                            <div className="text-[10px] text-gray-400 font-medium px-1">
-                              +{dayLeads.length - 2} more
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* THE ORIGINAL 3 COLUMNS (Unchanged, just moved down) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-              {/* COLUMN 1: OVERDUE */}
-              <div className="bg-white rounded-xl border border-red-100 shadow-sm overflow-hidden">
-                <div className="bg-red-50/50 border-b border-red-100 px-4 py-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-red-700">
-                    <AlertCircle className="w-4 h-4" />
-                    <h3 className="font-semibold text-sm">Overdue Callbacks</h3>
-                  </div>
-                  <span className="bg-red-100 text-red-800 text-xs font-bold px-2.5 py-0.5 rounded-full">{overdue.length}</span>
-                </div>
-                <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
-                  {overdue.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-6">No overdue contacts. Great job! ✨</p>
-                  ) : (
-                    overdue.map((lead) => <ScheduleCard key={lead.id} lead={lead} onFail={() => handleCallFailed(lead.id)} onSuccess={() => handleCallSuccess(lead.id)} />)
-                  )}
-                </div>
-              </div>
-
-              {/* COLUMN 2: TODAY */}
-              <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden">
-                <div className="bg-blue-50/50 border-b border-blue-100 px-4 py-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-blue-700">
-                    <Phone className="w-4 h-4" />
-                    <h3 className="font-semibold text-sm">Today's Tasks</h3>
-                  </div>
-                  <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded-full">{today.length}</span>
-                </div>
-                <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
-                  {today.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-6">All clear for today!</p>
-                  ) : (
-                    today.map((lead) => <ScheduleCard key={lead.id} lead={lead} onFail={() => handleCallFailed(lead.id)} onSuccess={() => handleCallSuccess(lead.id)} />)
-                  )}
-                </div>
-              </div>
-
-              {/* COLUMN 3: UPCOMING */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="bg-gray-50 border-b border-gray-200 px-4 py-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <CalendarIcon className="w-4 h-4" />
-                    <h3 className="font-semibold text-sm">Upcoming Follow-ups</h3>
-                  </div>
-                  <span className="bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{upcoming.length}</span>
-                </div>
-                <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
-                  {upcoming.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-6">No upcoming agendaments.</p>
-                  ) : (
-                    upcoming.map((lead) => <ScheduleCard key={lead.id} lead={lead} onFail={() => handleCallFailed(lead.id)} onSuccess={() => handleCallSuccess(lead.id)} />)
-                  )}
-                </div>
-              </div>
-            </div>
-
-          </div>
-        )}
+        </div>
       </main>
+
+      <EventModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchData} currentUser={user!} />
     </div>
   );
 }
 
-// INTERNAL COMPONENT: CARD (Unchanged)
-interface ScheduleCardProps {
-  lead: Lead;
-  onFail: () => void;
-  onSuccess: () => void;
-}
-
-function ScheduleCard({ lead, onFail, onSuccess }: ScheduleCardProps) {
+// ==========================================================
+// COMPONENTE INTERNO: O CARD DETALHADO REUTILIZÁVEL
+// ==========================================================
+function DetailCard({ item, onCallFailed, onCallSuccess, onEventComplete }: any) {
+  const isOverdue = item.isOverdue;
+  const timeStr = item.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
   return (
-    <div className="bg-white border border-gray-100 rounded-lg p-3.5 shadow-sm hover:shadow-md transition-all space-y-3">
-      <div>
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="font-semibold text-gray-900 text-sm truncate">{lead.full_name}</h4>
-          <span className="text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full shrink-0">
-            {lead.source}
-          </span>
-        </div>
-        <p className="text-xs text-gray-500 mt-0.5">{lead.phone}</p>
-        {lead.notes && (
-          <p className="text-xs bg-gray-50 p-2 border border-gray-100 rounded text-gray-600 mt-2 italic flex items-start gap-1">
-            <MessageSquare className="w-3 h-3 text-gray-400 mt-0.5 shrink-0" />
-            <span className="truncate">{lead.notes}</span>
-          </p>
-        )}
+    <div className={`border rounded-xl p-4 shadow-sm transition-all ${isOverdue ? "bg-red-50/80 border-red-200 hover:shadow-md" : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-md"}`}>
+      <div className="flex justify-between items-start gap-2">
+         <div>
+            <div className="flex items-center gap-1.5">
+               {item.type === 'callback' ? <Phone className="w-4 h-4 text-blue-500"/> : <Video className="w-4 h-4 text-purple-500"/>}
+               <h4 className={`font-semibold text-sm ${isOverdue ? 'text-red-900' : 'text-gray-900'}`}>{item.title}</h4>
+            </div>
+            {item.data.phone && <p className="text-xs text-gray-500 mt-1 font-medium">{item.data.phone}</p>}
+         </div>
+         <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md ${isOverdue ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+           {timeStr}
+         </span>
       </div>
-      <div className="pt-2 border-t border-gray-50 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
-          <CalendarIcon className="w-3 h-3" />
-          {lead.next_contact_date ? new Date(lead.next_contact_date).toLocaleDateString() : ""}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <button onClick={onFail} title="Lost / No Answer" className="p-1.5 rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
-            <XCircle className="w-4 h-4" />
-          </button>
-          <button onClick={onSuccess} title="Interested / In Progress" className="p-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm">
-            <CheckCircle2 className="w-4 h-4" />
-          </button>
-        </div>
+
+      {item.data.notes && (
+         <p className="text-xs text-gray-600 mt-3 bg-white/80 p-2.5 rounded border border-gray-100 italic flex items-start gap-2">
+            <MessageSquare className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
+            <span className="leading-relaxed">{item.data.notes}</span>
+         </p>
+      )}
+
+      <div className="mt-4 pt-3 border-t border-gray-100/80 flex justify-end gap-2">
+         {item.type === 'callback' ? (
+            <>
+              <button onClick={() => onCallFailed(item.rawId)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-red-200 text-red-600 hover:bg-red-100 text-xs font-medium transition-colors"><XCircle className="w-3.5 h-3.5"/> Lost / No Answer</button>
+              <button onClick={() => onCallSuccess(item.rawId)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 text-xs font-medium shadow-sm transition-colors"><CheckCircle2 className="w-3.5 h-3.5"/> Reached / Advance</button>
+            </>
+         ) : (
+            <button onClick={() => onEventComplete(item.rawId)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-xs font-medium shadow-sm transition-colors"><CheckCircle2 className="w-3.5 h-3.5"/> Mark as Done</button>
+         )}
       </div>
     </div>
   );
