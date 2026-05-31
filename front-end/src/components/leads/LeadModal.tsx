@@ -4,6 +4,13 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Lead } from "../../types/lead";
 
+// Converts a UTC Date to a "YYYY-MM-DDTHH:mm" string in the user's local timezone,
+// which is required by datetime-local inputs.
+const toLocalInput = (d: Date) => {
+  const offset = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+};
+
 const leadSchema = z.object({
   full_name: z.string().min(3, "Name must be at least 3 characters"),
   email: z.union([z.email("Invalid email address"), z.literal("")]).optional(),
@@ -49,7 +56,7 @@ export function LeadModal({ isOpen, onClose, onSave, editingLead }: LeadModalPro
         source: editingLead.source,
         notes: editingLead.notes || "",
         next_contact_date: editingLead.next_contact_date
-          ? new Date(editingLead.next_contact_date).toISOString().slice(0, 16)
+          ? toLocalInput(new Date(editingLead.next_contact_date))
           : "",
       });
     } else {
@@ -62,7 +69,9 @@ export function LeadModal({ isOpen, onClose, onSave, editingLead }: LeadModalPro
       ...values,
       email: values.email || undefined,
       notes: values.notes || undefined,
-      next_contact_date: values.next_contact_date || undefined,
+      next_contact_date: values.next_contact_date
+        ? new Date(values.next_contact_date).toISOString()
+        : undefined,
     });
   };
 
