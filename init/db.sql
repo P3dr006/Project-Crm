@@ -99,6 +99,18 @@ CREATE TABLE IF NOT EXISTS leads (
     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP  -- kept fresh by trg_leads_updated_at
 );
 
+-- Lead Activity: append-only log of every action taken on a lead.
+-- Powers the lead history/timeline feature. Never update or delete rows here.
+CREATE TABLE IF NOT EXISTS lead_activities (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    lead_id         UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id         UUID REFERENCES users(id) ON DELETE SET NULL,
+    type            VARCHAR(50) NOT NULL,  -- 'created', 'status_change', 'note', 'call_failed', 'call_success', 'callback_set'
+    description     TEXT,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Invitation: a token-based invite sent to bring a new user into a workspace.
 -- Only one pending invite per email per workspace is allowed (see partial unique index below).
 CREATE TABLE IF NOT EXISTS invitations (
@@ -135,6 +147,8 @@ CREATE TABLE IF NOT EXISTS contracts (
     signed_at       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Event: a scheduled meeting or callback assigned to a user.
+-- Can optionally be linked to a lead. Status is managed by the assigned user.
 CREATE TABLE IF NOT EXISTS events (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -147,7 +161,7 @@ CREATE TABLE IF NOT EXISTS events (
     scheduled_at    TIMESTAMP WITH TIME ZONE NOT NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'cancelled')),
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP  -- kept fresh by trg_events_updated_at
 );
 
 
@@ -155,7 +169,8 @@ CREATE TABLE IF NOT EXISTS events (
 -- 4. FUNCTIONS & TRIGGERS
 -- =============================================================================
 
--- Automatically refreshes updated_at on every UPDATE to the leads table.
+-- Shared trigger function: automatically refreshes updated_at on every UPDATE.
+-- Attached to any table that tracks modification time.
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -187,6 +202,13 @@ CREATE INDEX IF NOT EXISTS idx_users_email          ON users(email);
 CREATE INDEX IF NOT EXISTS idx_leads_workspace_id       ON leads(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_leads_assigned_to        ON leads(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_leads_workspace_status   ON leads(workspace_id, status);
+
+-- Lead Activities — fast lookup of the full history for a given lead
+CREATE INDEX IF NOT EXISTS idx_lead_activities_lead         ON lead_activities(lead_id);
+CREATE INDEX IF NOT EXISTS idx_lead_activities_workspace    ON lead_activities(workspace_id);
+
+-- Interactions — fast lookup of all contact attempts for a given lead
+CREATE INDEX IF NOT EXISTS idx_interactions_lead_id     ON interactions(lead_id);
 
 -- Contracts
 CREATE INDEX IF NOT EXISTS idx_contracts_workspace_id   ON contracts(workspace_id);
