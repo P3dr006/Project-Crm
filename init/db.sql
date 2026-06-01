@@ -21,7 +21,12 @@ DO $$
 BEGIN
     -- Lead lifecycle stage
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'lead_status') THEN
-        CREATE TYPE lead_status AS ENUM ('New', 'In Progress', 'Qualified', 'Lost', 'Converted');
+        CREATE TYPE lead_status AS ENUM ('New', 'In Progress', 'Qualified', 'Lost', 'Converted', 'No Response');
+    END IF;
+
+    -- Add 'No Response' to existing installs (safe — ADD VALUE is idempotent in Postgres 14+)
+    IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'No Response' AND enumtypid = 'lead_status'::regtype) THEN
+        ALTER TYPE lead_status ADD VALUE 'No Response';
     END IF;
 
     -- Where the lead came from
