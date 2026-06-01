@@ -69,6 +69,21 @@ class AuthResponse(BaseModel):
     token_type: str
     user: UserResponse
 
+# --- CONTACT SCHEMAS ---
+
+class ContactResponse(BaseModel):
+    """Data returned to the frontend for a contact."""
+    id: str
+    workspace_id: str
+    full_name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    source: str
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
 # --- LEAD SCHEMAS ---
 
 class LeadCreate(BaseModel):

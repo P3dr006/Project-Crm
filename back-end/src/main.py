@@ -12,12 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from src.auth_utils import create_access_token, verify_access_token
+from src.crud.contacts import get_contacts_by_workspace, check_contact_duplicate, normalize_phone
 from src.crud.events import create_event, get_events_by_workspace, update_event, delete_event
 from src.crud.leads import create_lead, get_leads_by_workspace, get_lead_by_id, delete_lead, update_lead, auto_close_stale_callbacks
 from src.crud.stats import get_stats
 from src.crud.users import create_user, authenticate_user, update_user, get_workspace_members
 from src.schemas import (
     AuthResponse,
+    ContactResponse,
     EventCreate, EventUpdate, EventResponse,
     LeadCreate, LeadUpdate,
     UserCreate, UserLogin, UserUpdate,
@@ -127,6 +129,40 @@ def list_workspace_members(current_user: dict = Depends(get_current_user)):
 
 
 # =============================================================================
+# CONTACT ROUTES
+# =============================================================================
+
+@app.get("/contacts/check")
+def contact_duplicate_check(
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Returns the existing contact if phone (normalized) or email already exists in this workspace."""
+    result = check_contact_duplicate(
+        workspace_id=current_user["workspace_id"],
+        phone=normalize_phone(phone) if phone else None,
+        email=email or None,
+    )
+    return result or {}
+
+
+@app.get("/contacts")
+def list_contacts(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    return get_contacts_by_workspace(
+        workspace_id=current_user["workspace_id"],
+        search=search,
+        page=page,
+        size=size,
+    )
+
+
+# =============================================================================
 # STATS ROUTES
 # =============================================================================
 
@@ -158,15 +194,17 @@ def create_new_lead(lead_data: LeadCreate, current_user: dict = Depends(get_curr
 @app.get("/leads")
 def get_workspace_leads(
     page: int = Query(1, ge=1),
-    size: int = Query(50, ge=1, le=100),
+    size: int = Query(20, ge=1, le=100),
     start: Optional[str] = None,
     end: Optional[str] = None,
     callback_start: Optional[str] = None,
     callback_end: Optional[str] = None,
+    status: Optional[str] = None,
+    source: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     offset = (page - 1) * size
-    leads = get_leads_by_workspace(
+    result = get_leads_by_workspace(
         workspace_id=current_user["workspace_id"],
         user_id=current_user["user_id"],
         role=current_user["role"],
@@ -174,10 +212,12 @@ def get_workspace_leads(
         end_date=end,
         callback_start=callback_start,
         callback_end=callback_end,
+        status=status,
+        source=source,
         limit=size,
         offset=offset,
     )
-    return {"page": page, "size": size, "leads": leads}
+    return {"page": page, "size": size, **result}
 
 
 @app.get("/leads/{lead_id}")
