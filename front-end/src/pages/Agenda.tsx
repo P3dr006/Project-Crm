@@ -22,12 +22,12 @@ export function Agenda() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Navegação
+  // Navigation
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // Filtros do Painel Direito
+
+  // Right panel filters
   const [typeFilter, setTypeFilter] = useState<"all" | "callback" | "meeting">("all");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -58,7 +58,7 @@ export function Agenda() {
     fetchData();
   }, [fetchData]);
 
-  // --- AÇÕES RÁPIDAS ---
+  // --- QUICK ACTIONS ---
   const handleCallFailed = async (leadId: string) => {
     try {
       setLeads(prev => prev.filter(l => l.id !== leadId));
@@ -91,7 +91,7 @@ export function Agenda() {
     } catch { fetchData(); }
   };
 
-  // --- NORMALIZAÇÃO DE DADOS (Junta Leads e Eventos numa única lista) ---
+  // --- DATA NORMALIZATION (merges leads and events into a single timeline list) ---
   const normalizedItems = useMemo(() => {
     const items: any[] = [];
     const now = new Date();
@@ -113,7 +113,7 @@ export function Agenda() {
     return items;
   }, [leads, events]);
 
-  // --- LÓGICA DO PAINEL DIREITO (Selecionados e Atrasados) ---
+  // --- RIGHT PANEL LOGIC (selected day items and overdue items) ---
   const selectedDayItems = useMemo(() => {
     let items = normalizedItems.filter(item => 
       item.time.getDate() === selectedDate.getDate() &&
@@ -131,7 +131,7 @@ export function Agenda() {
     return normalizedItems.filter(i => i.isOverdue).sort((a, b) => a.time.getTime() - b.time.getTime());
   }, [normalizedItems]);
 
-  // --- VARIÁVEIS DO CALENDÁRIO ---
+  // --- CALENDAR VARIABLES ---
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
   const todayDate = new Date();
@@ -143,7 +143,7 @@ export function Agenda() {
       <main className="py-8 px-6 flex-1 max-w-[1600px] w-full mx-auto flex flex-col lg:flex-row gap-8 items-start">
         
         {/* ================================================== */}
-        {/* COLUNA ESQUERDA: O GRANDE CALENDÁRIO               */}
+        {/* LEFT COLUMN: MAIN CALENDAR                         */}
         {/* ================================================== */}
         <div className="w-full lg:w-2/3 bg-white border border-gray-200 rounded-xl shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
@@ -180,7 +180,7 @@ export function Agenda() {
               const isSelected = selectedDate.getDate() === day && selectedDate.getMonth() === currentMonth.getMonth() && selectedDate.getFullYear() === currentMonth.getFullYear();
               const isToday = todayDate.getDate() === day && todayDate.getMonth() === currentMonth.getMonth() && todayDate.getFullYear() === currentMonth.getFullYear();
               
-              // Busca itens apenas para esta célula
+              // Fetch items only for this calendar cell
               const dayItems = normalizedItems.filter(item => item.time.getDate() === day && item.time.getMonth() === currentMonth.getMonth() && item.time.getFullYear() === currentMonth.getFullYear());
               const callbacks = dayItems.filter(item => item.type === 'callback');
               const meetings = dayItems.filter(item => item.type === 'meeting');
@@ -227,11 +227,11 @@ export function Agenda() {
         </div>
 
         {/* ================================================== */}
-        {/* COLUNA DIREITA: INFORMAÇÕES DETALHADAS E FILTROS   */}
+        {/* RIGHT COLUMN: DETAIL PANEL AND FILTERS             */}
         {/* ================================================== */}
         <div className="w-full lg:w-1/3 flex flex-col gap-6">
           
-          {/* PAINEL DE ATRASADOS (Sempre visível se houver pendências passadas) */}
+          {/* OVERDUE PANEL — always visible when there are past pending items */}
           {overdueItems.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-5 shadow-sm">
               <h3 className="text-red-800 font-bold flex items-center gap-2 mb-4">
@@ -245,7 +245,7 @@ export function Agenda() {
             </div>
           )}
 
-          {/* PAINEL DO DIA SELECIONADO (Com Filtros) */}
+          {/* SELECTED DAY PANEL (with filters) */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex-1 flex flex-col">
             <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-5 gap-3 border-b pb-4">
               <h3 className="font-bold text-gray-900 text-lg tracking-tight">

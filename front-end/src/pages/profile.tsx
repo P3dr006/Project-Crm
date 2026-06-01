@@ -36,7 +36,7 @@ export function Profile() {
     }
   };
 
-  // Dinâmica de cores baseada no plano e cargo
+  // Color scheme based on plan and role
   const planColors: Record<string, string> = {
     Bronze: "bg-orange-100 text-orange-800 border-orange-200",
     Silver: "bg-gray-100 text-gray-800 border-gray-200",
