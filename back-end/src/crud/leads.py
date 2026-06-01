@@ -1,4 +1,5 @@
 import logging
+import math
 from typing import Optional
 from fastapi import HTTPException
 from src.database import get_db_connection, release_db_connection
@@ -170,7 +171,6 @@ def get_leads_by_workspace(
                 lead["next_contact_date"] = lead["next_contact_date"].isoformat()
             leads.append(lead)
 
-        import math
         return {
             "leads": leads,
             "total": total,

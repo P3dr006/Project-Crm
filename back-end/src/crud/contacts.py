@@ -1,4 +1,5 @@
 import re
+import math
 import logging
 from src.database import get_db_connection, release_db_connection
 
@@ -170,7 +171,6 @@ def get_contacts_by_workspace(
                 c["updated_at"] = c["updated_at"].isoformat()
             contacts.append(c)
 
-        import math
         return {
             "contacts": contacts,
             "total": total,
