@@ -52,8 +52,7 @@ export function Dashboard() {
   };
 
   useEffect(() => {
-    fetchStats();
-    fetchLeads();
+    Promise.all([fetchStats(), fetchLeads()]);
   }, [dateFilter]);
 
   const handleOpenEditModal = (lead: Lead) => {
