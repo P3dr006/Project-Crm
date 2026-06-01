@@ -87,12 +87,29 @@ CREATE TABLE IF NOT EXISTS users (
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Contact: a permanent record of a person in the workspace.
+-- Created automatically on lead creation via upsert (deduplication by phone or email).
+-- Multiple leads can reference the same contact over time.
+CREATE TABLE IF NOT EXISTS contacts (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    full_name       VARCHAR(100) NOT NULL,
+    phone           VARCHAR(20),
+    email           VARCHAR(100),
+    source          lead_source NOT NULL DEFAULT 'Other',
+    notes           TEXT,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Lead: a potential customer being tracked by the workspace.
 -- assigned_to points to the user responsible for this lead.
+-- contact_id links to the permanent contact record.
 CREATE TABLE IF NOT EXISTS leads (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     workspace_id        UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     assigned_to         UUID REFERENCES users(id) ON DELETE SET NULL,
+    contact_id          UUID REFERENCES contacts(id) ON DELETE SET NULL,
     full_name           VARCHAR(100) NOT NULL,
     phone               VARCHAR(20) NOT NULL,
     email               VARCHAR(100),
@@ -103,6 +120,17 @@ CREATE TABLE IF NOT EXISTS leads (
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP  -- kept fresh by trg_leads_updated_at
 );
+
+-- Migration: add contact_id to leads on existing databases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'leads' AND column_name = 'contact_id'
+    ) THEN
+        ALTER TABLE leads ADD COLUMN contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- Lead Activity: append-only log of every action taken on a lead.
 -- Powers the lead history/timeline feature. Never update or delete rows here.
@@ -189,6 +217,11 @@ CREATE TRIGGER trg_leads_updated_at
     BEFORE UPDATE ON leads
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_contacts_updated_at ON contacts;
+CREATE TRIGGER trg_contacts_updated_at
+    BEFORE UPDATE ON contacts
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 DROP TRIGGER IF EXISTS trg_events_updated_at ON events;
 CREATE TRIGGER trg_events_updated_at
     BEFORE UPDATE ON events
@@ -202,6 +235,13 @@ CREATE TRIGGER trg_events_updated_at
 -- Users
 CREATE INDEX IF NOT EXISTS idx_users_workspace_id   ON users(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_users_email          ON users(email);
+
+-- Contacts — unique partial indexes enforce deduplication per workspace
+CREATE INDEX IF NOT EXISTS idx_contacts_workspace_id ON contacts(workspace_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique_phone
+    ON contacts(workspace_id, phone) WHERE phone IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_unique_email
+    ON contacts(workspace_id, email) WHERE email IS NOT NULL;
 
 -- Leads — compound index covers the most common dashboard query: leads per workspace filtered by status
 CREATE INDEX IF NOT EXISTS idx_leads_workspace_id       ON leads(workspace_id);
