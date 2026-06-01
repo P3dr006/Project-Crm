@@ -12,6 +12,10 @@ import type { Event } from "../types/events";
 import type { Lead } from "../types/lead";
 import { useAuthStore } from "../store/authStore";
 
+// Uses local time methods to avoid UTC date shift on UTC-3 (and other) timezones
+const toLocalDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 export function Agenda() {
   const user = useAuthStore((s) => s.user);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -30,21 +34,27 @@ export function Agenda() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Both filters scoped to the viewed month — overdue = items in this month before today
+      const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const lastDay  = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+      const callbackStart  = toLocalDateStr(firstDay);
+      const callbackEnd    = toLocalDateStr(lastDay);
+
       const [leadsRes, eventsRes] = await Promise.all([
-        api.get("/leads?size=100"),
-        api.get("/events")
+        api.get(`/leads?size=100&callback_start=${callbackStart}&callback_end=${callbackEnd}`),
+        api.get(`/events?scheduled_start=${callbackStart}&scheduled_end=${callbackEnd}`)
       ]);
-      const allLeads = leadsRes.data.leads || leadsRes.data;
-      setLeads(allLeads.filter((l: Lead) => l.next_contact_date));
+      setLeads(leadsRes.data.leads || leadsRes.data);
       setEvents(eventsRes.data);
     } catch {
       toast.error("Failed to load schedule");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentMonth]);
 
   useEffect(() => {
+    api.post("/leads/auto-close").catch(() => {});
     fetchData();
   }, [fetchData]);
 
@@ -62,6 +72,14 @@ export function Agenda() {
       setLeads(prev => prev.filter(l => l.id !== leadId));
       await api.patch(`/leads/${leadId}`, { status: "In Progress", next_contact_date: null });
       toast.success("Moved to In Progress!");
+    } catch { fetchData(); }
+  };
+
+  const handleCancelCallback = async (leadId: string) => {
+    try {
+      setLeads(prev => prev.filter(l => l.id !== leadId));
+      await api.patch(`/leads/${leadId}`, { next_contact_date: null });
+      toast.success("Callback cancelled.");
     } catch { fetchData(); }
   };
 
@@ -221,7 +239,7 @@ export function Agenda() {
               </h3>
               <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                 {overdueItems.map(item => (
-                  <DetailCard key={item.id} item={item} onCallFailed={handleCallFailed} onCallSuccess={handleCallSuccess} onEventComplete={handleEventComplete} />
+                  <DetailCard key={item.id} item={item} onCallFailed={handleCallFailed} onCallSuccess={handleCallSuccess} onEventComplete={handleEventComplete} onCancelCallback={handleCancelCallback} />
                 ))}
               </div>
             </div>
@@ -257,7 +275,7 @@ export function Agenda() {
                 </div>
               ) : (
                 selectedDayItems.map(item => (
-                  <DetailCard key={item.id} item={item} onCallFailed={handleCallFailed} onCallSuccess={handleCallSuccess} onEventComplete={handleEventComplete} />
+                  <DetailCard key={item.id} item={item} onCallFailed={handleCallFailed} onCallSuccess={handleCallSuccess} onEventComplete={handleEventComplete} onCancelCallback={handleCancelCallback} />
                 ))
               )}
             </div>
@@ -273,7 +291,7 @@ export function Agenda() {
 // ==========================================================
 // COMPONENTE INTERNO: O CARD DETALHADO REUTILIZÁVEL
 // ==========================================================
-function DetailCard({ item, onCallFailed, onCallSuccess, onEventComplete }: any) {
+function DetailCard({ item, onCallFailed, onCallSuccess, onEventComplete, onCancelCallback }: any) {
   const isOverdue = item.isOverdue;
   const timeStr = item.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
@@ -302,6 +320,7 @@ function DetailCard({ item, onCallFailed, onCallSuccess, onEventComplete }: any)
       <div className="mt-4 pt-3 border-t border-gray-100/80 flex justify-end gap-2">
          {item.type === 'callback' ? (
             <>
+              <button onClick={() => onCancelCallback(item.rawId)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-100 text-xs font-medium transition-colors"><XCircle className="w-3.5 h-3.5"/> Cancel</button>
               <button onClick={() => onCallFailed(item.rawId)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-red-200 text-red-600 hover:bg-red-100 text-xs font-medium transition-colors"><XCircle className="w-3.5 h-3.5"/> Lost / No Answer</button>
               <button onClick={() => onCallSuccess(item.rawId)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 text-xs font-medium shadow-sm transition-colors"><CheckCircle2 className="w-3.5 h-3.5"/> Reached / Advance</button>
             </>
