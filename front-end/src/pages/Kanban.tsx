@@ -14,7 +14,7 @@ import type { Lead } from "../types/lead";
 import { Navbar } from "../components/NavBar";
 import { KanbanColumn } from "../components/kanban/KanbanColumn";
 import { KanbanCard } from "../components/kanban/KanbanCard";
-import { Calendar, ChevronDown } from "lucide-react";
+import { DateRangeFilter } from "../components/dashboard/DateRangeFilter";
 
 const STATUSES = ["New", "In Progress", "Qualified", "Lost", "Converted", "No Response"] as const;
 type Status = (typeof STATUSES)[number];
@@ -28,24 +28,14 @@ const STATUS_COLORS: Record<Status, string> = {
   "No Response":  "bg-orange-500",
 };
 
-// Calculates start/end dates in the user's local timezone based on the selected filter
-const getDateRange = (filter: string) => {
-  const today = new Date();
-  const start = new Date();
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  if (filter === "week") {
-    start.setDate(today.getDate() - 7);
-  } else if (filter === "month") {
-    start.setMonth(today.getMonth() - 1);
-  } else if (filter === "year") {
-    start.setFullYear(today.getFullYear() - 1);
-  } else if (filter !== "today") {
-    return { start_date: null, end_date: null };
-  }
-
+const getCurrentMonthRange = () => {
+  const now = new Date();
   return {
-    start_date: start.toISOString().split("T")[0],
-    end_date: today.toISOString().split("T")[0],
+    start: toDateStr(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end:   toDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
   };
 };
 
@@ -54,7 +44,7 @@ export function Kanban() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   
-  const [timeFilter, setTimeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState(getCurrentMonthRange());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -64,19 +54,19 @@ export function Kanban() {
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { start_date, end_date } = getDateRange(timeFilter);
-      let url = "/leads?size=100";
-      if (start_date && end_date) {
-        url += `&start=${start_date}&end=${end_date}`;
+      const params = new URLSearchParams({ size: "100" });
+      if (dateFilter.start && dateFilter.end) {
+        params.set("start", dateFilter.start);
+        params.set("end", dateFilter.end);
       }
-      const response = await api.get(url);
+      const response = await api.get(`/leads?${params}`);
       setLeads(response.data.leads || []);
     } catch {
       toast.error("Failed to load leads.");
     } finally {
       setIsLoading(false);
     }
-  }, [timeFilter]);
+  }, [dateFilter]);
 
   useEffect(() => {
     fetchLeads();
@@ -131,25 +121,7 @@ export function Kanban() {
               </p>
             </div>
 
-            <div className="relative group inline-block w-full sm:w-auto">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <Calendar className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
-              </div>
-              <select
-                value={timeFilter}
-                onChange={(e) => setTimeFilter(e.target.value)}
-                className="block w-full sm:w-48 appearance-none bg-white border border-gray-200 text-gray-700 py-2.5 pl-9 pr-10 rounded-lg text-sm font-medium hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm cursor-pointer"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">Last 7 Days</option>
-                <option value="month">Last 30 Days</option>
-                <option value="year">This Year</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
-              </div>
-            </div>
+            <DateRangeFilter onFilterChange={(start, end) => setDateFilter({ start, end })} />
           </div>
 
           {isLoading ? (
