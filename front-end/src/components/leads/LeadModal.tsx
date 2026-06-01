@@ -15,7 +15,7 @@ const leadSchema = z.object({
   full_name: z.string().min(3, "Name must be at least 3 characters"),
   email: z.union([z.email("Invalid email address"), z.literal("")]).optional(),
   phone: z.string().min(8, "Phone must be at least 8 characters"),
-  status: z.enum(["New", "In Progress", "Qualified", "Lost", "Converted"]),
+  status: z.enum(["New", "In Progress", "Qualified", "Lost", "Converted", "No Response"]),
   source: z.enum(["Instagram", "WhatsApp", "Website", "Referral", "Other"]),
   notes: z.string().optional(),
   next_contact_date: z.string().optional(),
@@ -27,7 +27,7 @@ export type LeadFormData = {
   full_name: string;
   phone: string;
   email?: string;
-  status: "New" | "In Progress" | "Qualified" | "Lost" | "Converted";
+  status: "New" | "In Progress" | "Qualified" | "Lost" | "Converted" | "No Response";
   source: "Instagram" | "WhatsApp" | "Website" | "Referral" | "Other";
   notes?: string;
   next_contact_date?: string;
@@ -117,6 +117,7 @@ export function LeadModal({ isOpen, onClose, onSave, editingLead }: LeadModalPro
                 <option value="Qualified">Qualified</option>
                 <option value="Lost">Lost</option>
                 <option value="Converted">Converted</option>
+                <option value="No Response">No Response</option>
               </select>
             </div>
 

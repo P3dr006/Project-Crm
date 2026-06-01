@@ -5,7 +5,7 @@ export interface Lead {
   full_name: string;
   phone: string;
   email?: string;
-  status: 'New' | 'In Progress' | 'Qualified' | 'Lost' | 'Converted';
+  status: 'New' | 'In Progress' | 'Qualified' | 'Lost' | 'Converted' | 'No Response';
   source: 'Instagram' | 'WhatsApp' | 'Website' | 'Referral' | 'Other';
   next_contact_date?: string;
   notes?: string;

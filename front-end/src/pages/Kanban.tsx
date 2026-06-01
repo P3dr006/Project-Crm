@@ -16,7 +16,7 @@ import { KanbanColumn } from "../components/kanban/KanbanColumn";
 import { KanbanCard } from "../components/kanban/KanbanCard";
 import { Calendar, ChevronDown } from "lucide-react";
 
-const STATUSES = ["New", "In Progress", "Qualified", "Lost", "Converted"] as const;
+const STATUSES = ["New", "In Progress", "Qualified", "Lost", "Converted", "No Response"] as const;
 type Status = (typeof STATUSES)[number];
 
 const STATUS_COLORS: Record<Status, string> = {
@@ -25,6 +25,7 @@ const STATUS_COLORS: Record<Status, string> = {
   "Qualified":    "bg-indigo-500",
   "Lost":         "bg-red-500",
   "Converted":    "bg-green-500",
+  "No Response":  "bg-orange-500",
 };
 
 // Calculates start/end dates in the user's local timezone based on the selected filter
