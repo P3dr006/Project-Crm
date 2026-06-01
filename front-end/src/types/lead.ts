@@ -2,6 +2,7 @@ export interface Lead {
   id: string;
   workspace_id: string;
   assigned_to?: string | null;
+  contact_id?: string | null;
   full_name: string;
   phone: string;
   email?: string;

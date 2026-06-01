@@ -7,6 +7,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Kanban } from "./pages/Kanban";
 import { Profile } from "./pages/Profile";
 import { Agenda } from "./pages/Agenda";
+import { Clients } from "./pages/Clients";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { useAuthStore } from "./store/authStore";
 import { api } from "./services/api";
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/agenda" element={<Agenda />} />
+          <Route path="/clients" element={<Clients />} />
         </Route>
 
         {/* Default Redirects */}

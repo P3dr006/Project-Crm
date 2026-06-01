@@ -8,8 +8,9 @@ export function Navbar() {
   const navLinks = [
     { to: "/dashboard", label: "Dashboard" },
     { to: "/kanban", label: "Kanban" },
-    { to: "/profile", label: "Profile" },
+    { to: "/clients", label: "Clients" },
     { to: "/agenda", label: "Agenda" },
+    { to: "/profile", label: "Profile" },
   ];
 
   return (
