@@ -13,6 +13,7 @@ class LeadStatus(str, Enum):
     qualified = "Qualified"
     lost = "Lost"
     converted = "Converted"
+    no_response = "No Response"
 
 class LeadSource(str, Enum):
     """Allowed values for lead source."""

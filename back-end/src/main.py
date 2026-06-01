@@ -13,7 +13,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from src.auth_utils import create_access_token, verify_access_token
 from src.crud.events import create_event, get_events_by_workspace, update_event, delete_event
-from src.crud.leads import create_lead, get_leads_by_workspace, get_lead_by_id, delete_lead, update_lead
+from src.crud.leads import create_lead, get_leads_by_workspace, get_lead_by_id, delete_lead, update_lead, auto_close_stale_callbacks
 from src.crud.stats import get_stats
 from src.crud.users import create_user, authenticate_user, update_user, get_workspace_members
 from src.schemas import (
@@ -161,6 +161,8 @@ def get_workspace_leads(
     size: int = Query(50, ge=1, le=100),
     start: Optional[str] = None,
     end: Optional[str] = None,
+    callback_start: Optional[str] = None,
+    callback_end: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     offset = (page - 1) * size
@@ -170,6 +172,8 @@ def get_workspace_leads(
         role=current_user["role"],
         start_date=start,
         end_date=end,
+        callback_start=callback_start,
+        callback_end=callback_end,
         limit=size,
         offset=offset,
     )
@@ -187,6 +191,13 @@ def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
+
+
+@app.post("/leads/auto-close", status_code=status.HTTP_200_OK)
+def run_auto_close(current_user: dict = Depends(get_current_user)):
+    """Closes leads with callbacks overdue by 60+ days, marking them as No Response."""
+    closed = auto_close_stale_callbacks(current_user["workspace_id"])
+    return {"closed": closed}
 
 
 @app.patch("/leads/{lead_id}")
@@ -226,11 +237,17 @@ def create_new_event(event_data: EventCreate, current_user: dict = Depends(get_c
 
 
 @app.get("/events", response_model=list[EventResponse])
-def list_events(current_user: dict = Depends(get_current_user)):
+def list_events(
+    scheduled_start: Optional[str] = None,
+    scheduled_end: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
     return get_events_by_workspace(
         workspace_id=current_user["workspace_id"],
         user_id=current_user["user_id"],
         role=current_user["role"],
+        scheduled_start=scheduled_start,
+        scheduled_end=scheduled_end,
     )
 
 

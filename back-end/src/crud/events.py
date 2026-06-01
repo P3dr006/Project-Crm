@@ -70,7 +70,13 @@ def create_event(workspace_id: str, created_by: str, user_role: str, data: dict)
         release_db_connection(conn)
 
 
-def get_events_by_workspace(workspace_id: str, user_id: str, role: str):
+def get_events_by_workspace(
+    workspace_id: str,
+    user_id: str,
+    role: str,
+    scheduled_start: str = None,
+    scheduled_end: str = None,
+):
     """Fetches events for a workspace. Employees only see their own events."""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -81,6 +87,14 @@ def get_events_by_workspace(workspace_id: str, user_id: str, role: str):
         if role == "Employee":
             query += " AND assigned_to = %s"
             params.append(user_id)
+
+        if scheduled_start:
+            query += " AND scheduled_at >= %s"
+            params.append(scheduled_start)
+
+        if scheduled_end:
+            query += " AND scheduled_at <= %s"
+            params.append(f"{scheduled_end} 23:59:59")
 
         query += " ORDER BY scheduled_at ASC"
         cursor.execute(query, tuple(params))

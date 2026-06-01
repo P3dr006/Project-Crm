@@ -76,6 +76,8 @@ def get_leads_by_workspace(
     role: str,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    callback_start: Optional[str] = None,
+    callback_end: Optional[str] = None,
     limit: int = 50,
     offset: int = 0
 ):
@@ -107,6 +109,14 @@ def get_leads_by_workspace(
             query += " AND created_at <= %s"
             params.append(f"{end_date} 23:59:59")
 
+        # Optional callback date range filter (used by Agenda and CallbackNotifier)
+        if callback_start:
+            query += " AND next_contact_date >= %s"
+            params.append(callback_start)
+        if callback_end:
+            query += " AND next_contact_date <= %s"
+            params.append(f"{callback_end} 23:59:59")
+
         # Sorting and pagination always applied last
         query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
@@ -132,6 +142,40 @@ def get_leads_by_workspace(
     finally:
         cursor.close()
         release_db_connection(conn)
+
+def auto_close_stale_callbacks(workspace_id: str) -> int:
+    """Marks as 'No Response' any lead whose callback has been overdue for 60+ days."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE leads
+            SET status = 'No Response',
+                next_contact_date = NULL,
+                notes = CASE
+                    WHEN notes IS NULL OR notes = ''
+                        THEN '[Auto] Closed after 60 days with no callback action.'
+                    ELSE notes || E'\n[Auto] Closed after 60 days with no callback action.'
+                END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE workspace_id = %s
+              AND next_contact_date < NOW() - INTERVAL '60 days'
+              AND status NOT IN ('Lost', 'Converted', 'No Response')
+            """,
+            (workspace_id,)
+        )
+        closed = cursor.rowcount
+        conn.commit()
+        return closed
+    except Exception as e:
+        logger.error("Error auto-closing stale callbacks: %s", e)
+        conn.rollback()
+        return 0
+    finally:
+        cursor.close()
+        release_db_connection(conn)
+
 
 def update_lead(lead_id: str, workspace_id: str, update_data: dict, user_id: str = None, role: str = None):
     """Updates allowed lead fields. Employees can only update leads assigned to them."""
