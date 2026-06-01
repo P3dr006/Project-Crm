@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Users, Target, Percent } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Users, Target, Percent, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../services/api";
 import type { Lead } from "../types/lead";
@@ -13,47 +13,79 @@ import { LeadsLineChart } from "../components/dashboard/LeadsLineChart";
 import { FunnelChart } from "../components/dashboard/FunnelChart";
 import { SourcePieChart } from "../components/dashboard/SourcePieChart";
 
+const PAGE_SIZE = 20;
+
+const STATUSES = ["New", "In Progress", "Qualified", "Lost", "Converted", "No Response"];
+const SOURCES  = ["Instagram", "WhatsApp", "Website", "Referral", "Other"];
+
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const getCurrentMonthRange = () => {
+  const now = new Date();
+  return {
+    start: toDateStr(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end:   toDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+};
+
 export function Dashboard() {
   const [stats, setStats] = useState<any>(null);
-  const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
+  const [dateFilter, setDateFilter] = useState(getCurrentMonthRange());
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      let url = "/stats";
+      const params = new URLSearchParams();
       if (dateFilter.start && dateFilter.end) {
-        url += `?start=${dateFilter.start}&end=${dateFilter.end}`;
+        params.set("start", dateFilter.start);
+        params.set("end", dateFilter.end);
       }
-      const response = await api.get(url);
+      const response = await api.get(`/stats${params.size ? "?" + params : ""}`);
       setStats(response.data);
-    } catch (error) {
-      console.error("Error fetching stats:", error);
+    } catch {
+      console.error("Error fetching stats");
     }
-  };
+  }, [dateFilter]);
 
-  const fetchLeads = async () => {
+  const fetchLeads = useCallback(async (p = page) => {
     setIsLoading(true);
     try {
-      let url = "/leads";
+      const params = new URLSearchParams({ page: String(p), size: String(PAGE_SIZE) });
       if (dateFilter.start && dateFilter.end) {
-        url += `?start=${dateFilter.start}&end=${dateFilter.end}`;
+        params.set("start", dateFilter.start);
+        params.set("end", dateFilter.end);
       }
-      const response = await api.get(url);
-      setLeads(response.data.leads || response.data);
-    } catch (error) {
-      console.error("Error fetching leads:", error);
+      if (statusFilter) params.set("status", statusFilter);
+      if (sourceFilter) params.set("source", sourceFilter);
+
+      const response = await api.get(`/leads?${params}`);
+      setLeads(response.data.leads || []);
+      setTotal(response.data.total || 0);
+      setPages(response.data.pages || 1);
+    } catch {
       toast.error("Failed to load leads.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [dateFilter, statusFilter, sourceFilter, page]);
+
+  // Reset to page 1 when any filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [dateFilter, statusFilter, sourceFilter]);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchLeads()]);
-  }, [dateFilter]);
+    Promise.all([fetchStats(), fetchLeads(page)]);
+  }, [dateFilter, statusFilter, sourceFilter, page]);
 
   const handleOpenEditModal = (lead: Lead) => {
     setEditingLead(lead);
@@ -65,10 +97,8 @@ export function Dashboard() {
     try {
       await api.delete(`/leads/${id}`);
       toast.success("Lead deleted successfully!");
-      fetchLeads();
-      fetchStats();
-    } catch (error) {
-      console.error("Error deleting lead:", error);
+      Promise.all([fetchLeads(page), fetchStats()]);
+    } catch {
       toast.error("Failed to delete lead.");
     }
   };
@@ -83,18 +113,16 @@ export function Dashboard() {
         toast.success("Lead created successfully!");
       }
       setIsModalOpen(false);
-      fetchLeads();
-      fetchStats();
+      Promise.all([fetchLeads(page), fetchStats()]);
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
-      const message = typeof detail === "string"
-        ? detail
-        : JSON.stringify(detail) ?? (editingLead ? "Failed to update lead." : "Failed to create lead.");
-      console.error("Lead save error:", error?.response?.data);
+      const message = typeof detail === "string" ? detail : "Failed to save lead.";
       toast.error(message);
       throw error;
     }
   };
+
+  const hasActiveFilters = statusFilter || sourceFilter;
 
   return (
     <div className="min-h-screen bg-gray-50 relative">
@@ -127,23 +155,79 @@ export function Dashboard() {
           <SourcePieChart data={stats?.sources || []} />
         </div>
 
-        {/* LEADS TABLE */}
-        <div className="sm:flex sm:items-center mb-4">
-          <div className="sm:flex-auto">
+        {/* LEADS TABLE HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div>
             <h2 className="text-xl font-semibold text-gray-900">Leads Pipeline</h2>
-            <p className="mt-1 text-sm text-gray-500">Manage your potential customers and track their status.</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {total} lead{total !== 1 ? "s" : ""} found
+            </p>
           </div>
-          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+          <button
+            onClick={() => { setEditingLead(null); setIsModalOpen(true); }}
+            className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition"
+          >
+            Add Lead
+          </button>
+        </div>
+
+        {/* FILTER BAR */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Statuses</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Sources</option>
+            {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+
+          {hasActiveFilters && (
             <button
-              onClick={() => { setEditingLead(null); setIsModalOpen(true); }}
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none transition"
+              onClick={() => { setStatusFilter(""); setSourceFilter(""); }}
+              className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition"
             >
-              Add Lead
+              <X className="w-3.5 h-3.5" /> Clear filters
             </button>
-          </div>
+          )}
         </div>
 
         <LeadTable leads={leads} isLoading={isLoading} onEdit={handleOpenEditModal} onDelete={handleDelete} />
+
+        {/* PAGINATION */}
+        {pages > 1 && (
+          <div className="mt-6 flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" /> Prev
+              </button>
+              <span className="text-sm text-gray-700 font-medium px-2">{page} / {pages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                disabled={page === pages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
       <LeadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveLead} editingLead={editingLead} />
