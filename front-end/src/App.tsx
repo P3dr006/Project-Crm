@@ -23,9 +23,10 @@ function CallbackNotifier() {
 
     const check = async () => {
       try {
-        const res = await api.get("/leads?size=100");
-        const leads: Lead[] = res.data.leads || res.data;
         const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const res = await api.get(`/leads?size=100&callback_start=${today}&callback_end=${today}`);
+        const leads: Lead[] = res.data.leads || res.data;
 
         leads.forEach((lead) => {
           if (!lead.next_contact_date) return;
