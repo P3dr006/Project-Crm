@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 from fastapi import HTTPException
 from src.database import get_db_connection, release_db_connection
+from src.crud.contacts import upsert_contact
 
 logger = logging.getLogger(__name__)
 
@@ -10,20 +11,45 @@ _UPDATABLE_FIELDS = {"full_name", "phone", "email", "status", "source", "notes",
 
 
 def create_lead(workspace_id: str, user_id: str, lead_data):
-    """Creates a new lead scoped to the workspace, assigned to the requesting user."""
+    """Creates a new lead scoped to the workspace, assigned to the requesting user.
+    Automatically upserts a contact record for deduplication."""
+    try:
+        contact_id = upsert_contact(
+            workspace_id=workspace_id,
+            full_name=lead_data.full_name,
+            phone=lead_data.phone,
+            email=lead_data.email,
+            source=lead_data.source.value,
+            notes=lead_data.notes,
+        )
+    except Exception:
+        contact_id = None
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            """
-            INSERT INTO leads (workspace_id, assigned_to, full_name, phone, email, status, source, notes, next_contact_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id;
-            """,
-            (workspace_id, user_id, lead_data.full_name, lead_data.phone,
-             lead_data.email, lead_data.status.value, lead_data.source.value,
-             lead_data.notes, lead_data.next_contact_date)
-        )
+        if contact_id:
+            cursor.execute(
+                """
+                INSERT INTO leads (workspace_id, assigned_to, contact_id, full_name, phone, email, status, source, notes, next_contact_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (workspace_id, user_id, contact_id, lead_data.full_name, lead_data.phone,
+                 lead_data.email, lead_data.status.value, lead_data.source.value,
+                 lead_data.notes, lead_data.next_contact_date)
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO leads (workspace_id, assigned_to, full_name, phone, email, status, source, notes, next_contact_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (workspace_id, user_id, lead_data.full_name, lead_data.phone,
+                 lead_data.email, lead_data.status.value, lead_data.source.value,
+                 lead_data.notes, lead_data.next_contact_date)
+            )
         lead_id = cursor.fetchone()[0]
         conn.commit()
         return str(lead_id)
@@ -78,38 +104,35 @@ def get_leads_by_workspace(
     end_date: Optional[str] = None,
     callback_start: Optional[str] = None,
     callback_end: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0
+    status: Optional[str] = None,
+    source: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
 ):
-    """Fetches all leads for a workspace with pagination, date filters, and role-based access."""
+    """Fetches leads for a workspace with pagination, date/status/source filters, and RBAC."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # Base query — always scoped to the workspace for tenant isolation
         query = """
             SELECT id, assigned_to, full_name, phone, email, status, source,
-                   notes, next_contact_date, created_at, updated_at
+                   notes, next_contact_date, created_at, updated_at,
+                   COUNT(*) OVER() AS total_count
             FROM leads
             WHERE workspace_id = %s
         """
         params = [workspace_id]
 
-        # Role-based access: Employees only see leads assigned to them
         if role == "Employee":
             query += " AND assigned_to = %s"
             params.append(user_id)
 
-        # Optional date range filters
         if start_date:
             query += " AND created_at >= %s"
             params.append(start_date)
-
         if end_date:
-            # Append 23:59:59 so the end date is inclusive for the full day
             query += " AND created_at <= %s"
             params.append(f"{end_date} 23:59:59")
 
-        # Optional callback date range filter (used by Agenda and CallbackNotifier)
         if callback_start:
             query += " AND next_contact_date >= %s"
             params.append(callback_start)
@@ -117,17 +140,25 @@ def get_leads_by_workspace(
             query += " AND next_contact_date <= %s"
             params.append(f"{callback_end} 23:59:59")
 
-        # Sorting and pagination always applied last
+        if status:
+            query += " AND status = %s"
+            params.append(status)
+        if source:
+            query += " AND source = %s"
+            params.append(source)
+
         query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
 
         cursor.execute(query, tuple(params))
-
-        # Serialize UUIDs and datetimes to JSON-safe strings
         columns = [desc[0] for desc in cursor.description]
-        leads = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        rows = cursor.fetchall()
 
-        for lead in leads:
+        total = 0
+        leads = []
+        for row in rows:
+            lead = dict(zip(columns, row))
+            total = lead.pop("total_count", 0)
             lead["id"] = str(lead["id"])
             if lead.get("assigned_to"):
                 lead["assigned_to"] = str(lead["assigned_to"])
@@ -137,8 +168,14 @@ def get_leads_by_workspace(
                 lead["updated_at"] = lead["updated_at"].isoformat()
             if lead.get("next_contact_date"):
                 lead["next_contact_date"] = lead["next_contact_date"].isoformat()
+            leads.append(lead)
 
-        return leads
+        import math
+        return {
+            "leads": leads,
+            "total": total,
+            "pages": max(1, math.ceil(total / limit)),
+        }
     finally:
         cursor.close()
         release_db_connection(conn)
