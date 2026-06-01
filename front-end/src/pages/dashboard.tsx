@@ -52,7 +52,7 @@ export function Dashboard() {
       const response = await api.get(`/stats${params.size ? "?" + params : ""}`);
       setStats(response.data);
     } catch {
-      console.error("Error fetching stats");
+      console.warn("Failed to fetch dashboard stats — KPI cards will show 0");
     }
   }, [dateFilter]);
 

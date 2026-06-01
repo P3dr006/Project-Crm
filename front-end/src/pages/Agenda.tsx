@@ -166,7 +166,17 @@ export function Agenda() {
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-xl overflow-hidden">
+          {isLoading && (
+            <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-xl overflow-hidden animate-pulse mb-0">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div key={i} className="bg-white min-h-[110px] p-2">
+                  <div className="h-4 w-6 bg-gray-200 rounded mb-2" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!isLoading && <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-xl overflow-hidden">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div key={day} className="bg-gray-50 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">{day}</div>
             ))}
@@ -223,7 +233,7 @@ export function Agenda() {
                 </div>
               );
             })}
-          </div>
+          </div>}
         </div>
 
         {/* ================================================== */}

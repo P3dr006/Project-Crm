@@ -20,13 +20,13 @@ export function EventModal({ isOpen, onClose, onSuccess, currentUser }: EventMod
 
   useEffect(() => {
     if (isOpen && currentUser.role !== "Employee") {
-      api.get("/users/members").then((res) => setTeam(res.data)).catch(console.error);
+      api.get("/users/members").then((res) => setTeam(res.data)).catch((e) => console.warn("Failed to load team members:", e));
     }
   }, [isOpen, currentUser.role]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     try {

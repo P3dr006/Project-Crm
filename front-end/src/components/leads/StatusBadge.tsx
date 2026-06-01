@@ -3,7 +3,6 @@ import type { Lead } from "../../types/lead";
 export const StatusBadge = ({ status }: { status: Lead['status'] }) => {
   const styles: Record<string, string> = {
     'New': "bg-blue-100 text-blue-800",
-    'Contacted': "bg-purple-100 text-purple-800",
     'In Progress': "bg-yellow-100 text-yellow-800",
     'Qualified': "bg-indigo-100 text-indigo-800",
     'Lost': "bg-red-100 text-red-800",

@@ -31,7 +31,7 @@ export function Profile() {
       toast.success("Profile updated successfully! ✨");
       setIsEditing(false);
     } catch (error) {
-      console.error(error);
+      console.warn("Failed to update profile:", error);
       toast.error("Failed to update profile.");
     }
   };
